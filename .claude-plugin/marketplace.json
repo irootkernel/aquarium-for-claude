@@ -1,0 +1,16 @@
+{
+  "name": "root-kernel-dev-claude-skills",
+  "description": "Root Kernel development skills for Claude Code, generated from the Codex plugin at irootkernel/root-kernel-dev-skills.",
+  "owner": {
+    "name": "Root Kernel",
+    "email": "cs@rootkernel.xyz",
+    "url": "https://home.rootkernel.xyz"
+  },
+  "plugins": [
+    {
+      "name": "root-kernel",
+      "source": "./plugins/root-kernel",
+      "category": "development"
+    }
+  ]
+}

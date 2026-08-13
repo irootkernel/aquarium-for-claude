@@ -1,0 +1,34 @@
+{
+  "upstream": {
+    "repository": "https://github.com/irootkernel/root-kernel-dev-skills",
+    "commit": "3b807b34597616dcfab295ef88b6e62dcc968fa9"
+  },
+  "overrides": [
+    "skills/dev-setup/SKILL.md",
+    "skills/dev-setup/references/agents-guidance.md",
+    "skills/independent-review/SKILL.md"
+  ],
+  "files": {
+    ".claude-plugin/plugin.json": "5191491a2bd703326198eefd49ace60dd34e1f1b3f481467195ec7ce9245075c",
+    "assets/logo-black.png": "6a16b6ddb575ace0b4103bb7d8d7ae53ed6a083531a5312856332866ef3e4801",
+    "assets/logo-small.png": "ce8821410df8a107e51d6efcd8ead3b4fbad92d687d7e680603bb51231b8b685",
+    "assets/logo-white.png": "968c57990194f40dc982ca21c517d695de5a0df0a597ed0365ebd5ee36fd9268",
+    "skills/deslop/LICENSE": "568bdf0b342093bb9babfb59faaaa2756432af1578ba8ba95a1add3701e2dbf2",
+    "skills/deslop/SKILL.md": "e89b68040b963a9fb5e5048b92f7d0da7e80d21637903ebda106843697f521d9",
+    "skills/dev-setup/SKILL.md": "8a3d225eeacc62593e9d20a86c0105096e7097ac87c07b6faffe4fb0eb49d1dd",
+    "skills/dev-setup/references/agents-guidance.md": "fa53e807e7efe8f427729eb31d6a994ab617b5e81d18486859a7e05f26e108a2",
+    "skills/dev-setup/references/tool-catalog.md": "26d24d97e2ce8da7e7096e85105ec07541f427a4560d1a46cc3b69b6d656cd40",
+    "skills/dev-setup/scripts/inspect_tools.py": "9d18fb304f0fefb6d3026d7262671e8d627d3bb92b8ad483d2c762cdb842b387",
+    "skills/epic-handler/SKILL.md": "49def0d77afe876e8fe2f49f43cbdcaae442dbdf9eb01f8fbf256b3f436b8ba9",
+    "skills/epic-validator/SKILL.md": "347ecef66e517dfb71c5f63eec4235604e34abc68628109eea9b5586a5347ac9",
+    "skills/independent-review/SKILL.md": "bfc62de49b308cf9f0127c9edf041a0029fc3c186cc65767f3080ab052c9b785",
+    "skills/task-close/SKILL.md": "b6be8f7d5056fc43b17cd782ff1ae46721566419891fd969a5117c9018de2c7c",
+    "skills/task-document/SKILL.md": "8f09bda94a83e1583979db0eeae9600ebdfbc79b74a5b3b4b9d27878df5b4e09",
+    "skills/task-handler/SKILL.md": "ca4fb1b4f5ef544d0925f0634e81b135dfe57cabfa95bf7e92897fe463b8fd18",
+    "skills/task-implement/SKILL.md": "19eb174053dbeea2266da21f7f6064f5e7a17059213370ababd3c8a47d8fe861",
+    "skills/task-plan/SKILL.md": "ee12ed2d1fb745d0092ef9a4188c40601ee7781c631b2005ae3f0c9d1e9a0481",
+    "skills/task-refine/SKILL.md": "2a9102844324214dc5c6f4cce1171ea998cb642c6f84a576f486ae18b746ac4a",
+    "skills/task-review/SKILL.md": "c181e83e955cb74742d944033e24d68089fee63f72535e9667f2fa855c8aafac",
+    "skills/task-verify/SKILL.md": "5b448d2716c0287d2c919385d7bd3c60324240e57905b5b67e41680e9f2062a5"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "root-kernel",
+  "displayName": "Root Kernel",
+  "version": "0.1.1",
+  "description": "Evidence-gated epic and task delivery, completed-epic validation, and development-tool setup workflows for Claude Code.",
+  "author": {
+    "name": "Root Kernel",
+    "email": "cs@rootkernel.xyz",
+    "url": "https://home.rootkernel.xyz"
+  },
+  "homepage": "https://home.rootkernel.xyz",
+  "repository": "https://github.com/irootkernel/root-kernel-dev-skills",
+  "license": "MIT",
+  "keywords": [
+    "roadmap",
+    "epic",
+    "task",
+    "orchestration",
+    "setup",
+    "testing",
+    "review",
+    "deslop",
+    "lora",
+    "lore",
+    "sanho",
+    "mulgae",
+    "gaori"
+  ],
+  "skills": "./skills/",
+  "metadata": {
+    "generatedFrom": "https://github.com/irootkernel/root-kernel-dev-skills",
+    "brandColor": "#10C4BE",
+    "icon": "./assets/logo-small.png",
+    "logo": "./assets/logo-white.png",
+    "privacyPolicyURL": "https://github.com/irootkernel/root-kernel-dev-skills/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/irootkernel/root-kernel-dev-skills/blob/main/TERMS.md"
+  }
+}
