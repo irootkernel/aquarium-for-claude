@@ -1,6 +1,6 @@
 {
-  "name": "root-kernel-dev-claude-skills",
-  "description": "Root Kernel development skills for Claude Code, generated from the Codex plugin at irootkernel/root-kernel-dev-skills.",
+  "name": "aquarium-for-claude",
+  "description": "Aquarium development skills for Claude Code, generated from the Codex plugin at irootkernel/aquarium.",
   "owner": {
     "name": "Root Kernel",
     "email": "cs@rootkernel.xyz",

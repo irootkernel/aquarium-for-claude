@@ -125,7 +125,7 @@ if UPSTREAM_PLUGIN.directory?
 end
 
 marketplace = JSON.parse(ROOT.join(".claude-plugin/marketplace.json").read)
-assert(marketplace.fetch("name") == "root-kernel-dev-claude-skills", "marketplace name is incorrect")
+assert(marketplace.fetch("name") == "aquarium-for-claude", "marketplace name is incorrect")
 assert(marketplace.dig("owner", "name").to_s != "", "marketplace requires an owner name")
 entries = marketplace.fetch("plugins")
 assert(entries.length == 1, "marketplace must publish exactly one plugin")
