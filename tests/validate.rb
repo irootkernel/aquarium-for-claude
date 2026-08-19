@@ -130,7 +130,10 @@ assert(
 # --- documentation convention ----------------------------------------------
 
 def structural?(line)
-  line.strip.empty? || line.match?(/\A(?:\#{1,6}\s|[-*+]\s|\d+\.\s|>|\||<)/)
+  # Match the stripped line: an indented sub-bullet is still structural, and
+  # classifying it as prose makes two adjacent ones look hard-wrapped.
+  stripped = line.strip
+  stripped.empty? || stripped.match?(/\A(?:\#{1,6}\s|[-*+]\s|\d+\.\s|>|\||<)/)
 end
 
 Pathname.glob(ROOT.join("**/*.md")).reject { |p| p.to_s.include?("/upstream/") }.sort.each do |path|
