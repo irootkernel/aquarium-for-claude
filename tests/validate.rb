@@ -10,11 +10,12 @@
 
 require "json"
 require "pathname"
+require "set"
 require "yaml"
 
 ROOT = Pathname.new(__dir__).parent
-PLUGIN = ROOT.join("plugins/root-kernel")
-UPSTREAM_PLUGIN = ROOT.join("upstream/plugins/root-kernel")
+PLUGIN = ROOT.join("plugins/aquarium")
+UPSTREAM_PLUGIN = ROOT.join("upstream/plugins/aquarium")
 
 failures = []
 
@@ -27,7 +28,7 @@ end
 
 # --- generated tree exists -------------------------------------------------
 
-assert(PLUGIN.directory?, "plugins/root-kernel/ has not been generated; run scripts/sync.py")
+assert(PLUGIN.directory?, "plugins/aquarium/ has not been generated; run scripts/sync.py")
 
 skill_paths = Pathname.glob(PLUGIN.join("skills/*/SKILL.md")).sort
 assert(!skill_paths.empty?, "no skills were generated")
@@ -73,17 +74,32 @@ end
 
 # --- host-neutral generated text -------------------------------------------
 
-FORBIDDEN_TEXT = ["$root-kernel:", "$lore-", "$orca-cli", "request_user_input", "--agent codex", "Codex"].freeze
+FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$lore-", "$orca-cli", "request_user_input",
+                  "--agent codex", "${PLUGIN_ROOT}", "Codex"].freeze
 
-Pathname.glob(PLUGIN.join("**/*.md")).sort.each do |path|
+# Some upstream text names the Codex CLI as a third-party tool rather than as the
+# host — a Mulgae provider, a required CLI version — and stays correct here. Each
+# exemption is gated on the upstream bytes a human reviewed, so `sync.py` stops
+# when that file changes. Only the `Codex` needle is skipped, and only for these.
+CODEX_EXEMPTIONS = begin
+  path = ROOT.join("overrides/codex-exemptions.json")
+  path.file? ? JSON.parse(path.read).keys.to_set : Set.new
+end
+
+Pathname.glob(PLUGIN.join("**/*.{md,json,py,yaml}")).sort.each do |path|
+  relative = path.relative_path_from(PLUGIN).to_s
+  next if relative == "sync-manifest.json"
+
   text = path.read
   FORBIDDEN_TEXT.each do |needle|
-    assert(!text.include?(needle), "generated text contains `#{needle}`: #{path.relative_path_from(PLUGIN)}")
+    next if needle == "Codex" && CODEX_EXEMPTIONS.include?(relative)
+
+    assert(!text.include?(needle), "generated text contains `#{needle}`: #{relative}")
   end
 end
 
 assert(
-  skill_paths.any? { |path| path.read.include?("/root-kernel:") },
+  skill_paths.any? { |path| path.read.include?("/aquarium:") },
   "generated skills never reference the Claude invocation form"
 )
 
@@ -115,7 +131,7 @@ entries = marketplace.fetch("plugins")
 assert(entries.length == 1, "marketplace must publish exactly one plugin")
 entry = entries.fetch(0)
 assert(entry.fetch("name") == manifest.fetch("name"), "marketplace entry must match the plugin name")
-assert(entry.fetch("source") == "./plugins/root-kernel", "marketplace source path is incorrect")
+assert(entry.fetch("source") == "./plugins/aquarium", "marketplace source path is incorrect")
 
 # Claude Code rejects a plugin whose components are declared in both the
 # manifest and the marketplace entry unless the entry sets `strict: true`.
@@ -126,6 +142,64 @@ assert(
   "marketplace entry declares components #{overlap.inspect} that plugin.json also declares; " \
   "remove them or set strict: true"
 )
+
+# --- generated tree covers upstream ----------------------------------------
+
+# `COPIED_DIRECTORIES` is an allowlist with no counterpart check, so `hooks/`
+# appeared upstream and was dropped in silence until someone noticed.
+if UPSTREAM_PLUGIN.directory?
+  upstream_directories = UPSTREAM_PLUGIN.children.select(&:directory?).map { |p| p.basename.to_s } - [".codex-plugin"]
+  upstream_directories.sort.each do |name|
+    assert(PLUGIN.join(name).directory?, "generated plugin is missing upstream directory `#{name}/`")
+  end
+end
+
+# --- roadmap commit hook ----------------------------------------------------
+
+hooks_path = PLUGIN.join("hooks/hooks.json")
+gate_path = PLUGIN.join("hooks/task_commit_gate.py")
+assert(hooks_path.file? && gate_path.file?, "the roadmap commit hook was not generated")
+
+pre_tool_use = JSON.parse(hooks_path.read).fetch("hooks").fetch("PreToolUse")
+assert(pre_tool_use.length == 1, "the commit hook must register exactly one PreToolUse matcher")
+assert(pre_tool_use.fetch(0).fetch("matcher") == "^Bash$", "the commit hook must match Bash only")
+
+# Claude Code expands `CLAUDE_PLUGIN_ROOT`. Under the Codex spelling the shell
+# expands nothing, `python3` cannot open `/hooks/task_commit_gate.py`, and it
+# exits 2 — which PreToolUse reads as deny. Every Bash call would be blocked, so
+# assert the correct spelling positively and the wrong one negatively.
+hook_command = pre_tool_use.fetch(0).fetch("hooks").fetch(0).fetch("command")
+assert(
+  hook_command == 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/task_commit_gate.py"',
+  "the commit hook must resolve its script through CLAUDE_PLUGIN_ROOT: #{hook_command}"
+)
+
+gate = gate_path.read
+assert(gate.include?("/aquarium:task-commit"), "the commit hook must name the Claude invocation form")
+assert(gate.include?("permissionDecision"), "the commit hook must use the PreToolUse permission protocol")
+assert(!gate.match?(%r{https?://}), "the commit hook must stay local")
+
+# `hooks/hooks.json` is loaded automatically from the plugin root. Declaring the
+# key as well would shadow the default folder and break the overlap rule above.
+assert(!manifest.key?("hooks"), "plugin manifest must not declare hooks; hooks/hooks.json is automatic")
+
+# --- managed Podway procedures ----------------------------------------------
+
+# The integration contract requires the installed copies to be byte-identical to
+# these sources, so the procedure IDs must survive transformation untouched.
+if UPSTREAM_PLUGIN.directory?
+  Pathname.glob(PLUGIN.join("assets/podway/procedures/*.yaml")).sort.each do |path|
+    relative = path.relative_path_from(PLUGIN)
+    assert(
+      path.binread == UPSTREAM_PLUGIN.join(relative).binread,
+      "managed Podway procedure must be byte-identical to upstream: #{relative}"
+    )
+    assert(
+      YAML.safe_load(path.read, aliases: false).fetch("id") == path.basename(".yaml").to_s,
+      "managed Podway procedure id must match its filename: #{relative}"
+    )
+  end
+end
 
 # --- documentation convention ----------------------------------------------
 

@@ -1,0 +1,43 @@
+{
+  "upstream": {
+    "repository": "https://github.com/irootkernel/aquarium",
+    "commit": "3248c926af6304eccaf8da38f61aa3796bad0fb4"
+  },
+  "overrides": [
+    "skills/dev-setup/SKILL.md",
+    "skills/dev-setup/references/agents-guidance.md",
+    "skills/dev-setup/references/tool-catalog.md",
+    "skills/independent-review/SKILL.md"
+  ],
+  "files": {
+    ".claude-plugin/plugin.json": "a0adc02f16bd2f7c71ab5238fffb672f6cdff36d57b59fb2e99cecb8e4d4d787",
+    "assets/logo-black.png": "a579cefe1ece0fa9b5cdae5cc16d66efef73d41ace4c59dd866e62eacb4c3a24",
+    "assets/logo-small.png": "954f4babc7f7d3cdc6c9bd510dce031dd7f9d6edde160b21fcc8ec067414f73e",
+    "assets/logo-white.png": "ea2a2874c9f12424d1cf482e37cfbd39baa08d0d45e766db41c3b578d2a78901",
+    "assets/podway/procedures/aquarium-goal-v2.yaml": "7d5ec6326a3ba21f37b381892d542b011f18c900d968e8b8dac8d8dad3d890a9",
+    "assets/podway/procedures/aquarium-task-v2.yaml": "32ca04d08d883603b15e29b7c634fd7ecfe452ad86426bfc1aa2c4ed5601fbf4",
+    "assets/podway/procedures/aquarium-validation-v2.yaml": "990979d97793b1bafab1add1b741754d00ecb6c0ae4b5847a5357b4e35cefd83",
+    "hooks/hooks.json": "257f941782ad2305f9510030974ed593944fbe39d834d0aeb8b81cbc2a890db6",
+    "hooks/task_commit_gate.py": "cac50d576f71c8c26b781d2e54d449dfa489859aac57660993f2d5871ffec75f",
+    "references/podway-integration.md": "af61b96af13a5bae3454a9eff6dbb5bdc9d3aba7fa4a12adb3acdf36d4a938f3",
+    "skills/deslop/LICENSE": "568bdf0b342093bb9babfb59faaaa2756432af1578ba8ba95a1add3701e2dbf2",
+    "skills/deslop/SKILL.md": "12274970bb918c3767dc7515ed8a34631c80627d514ec0fa0536a4db78c6fb2e",
+    "skills/dev-setup/SKILL.md": "6ccbec3bba02ec80952291a4fafe5ee2e2c33abc8e9ab6fe3a7287ba3b41642b",
+    "skills/dev-setup/references/agents-guidance.md": "63d59cd40dd6ba7a78e0fc3e710d0ef0204f8632bd4cd5967169283dee8fd65a",
+    "skills/dev-setup/references/tool-catalog.md": "acb948b5c63539200b259b33dfc9cb5e92976048512b6aa16219439bb32d423e",
+    "skills/dev-setup/scripts/inspect_tools.py": "c50fef65ceb7f07d0c216febb15da8aad0a560d61e310ccf1c9d6283d64ebe83",
+    "skills/epic-handler/SKILL.md": "17cd948f232a08dc3476943204f94648ddd3ff67c3b3222c409ebddbdf6f58ce",
+    "skills/epic-validator/SKILL.md": "663a6e033dd8401ae9760c52904ff386e848d8b7155206df58c883dc13721f76",
+    "skills/independent-review/SKILL.md": "af629d01517f74873f5771d4ef2178828d3d85dcf6d1c91cfd7a5229a20ad95f",
+    "skills/release-qa/SKILL.md": "8029179731de8b7ecdf4cfa7a42ab3a2d1029b9d5514fe59a0ee59b32b324371",
+    "skills/task-close/SKILL.md": "77b4d51771ea8df0d61c52dceeb2c4a6f656dcf863f551b336f7a6fd12f83c53",
+    "skills/task-commit/SKILL.md": "ddbcadaebae049c142ef77ce97a2890d1101a8e2fb730fa62b95e0c027e9d1f0",
+    "skills/task-document/SKILL.md": "c74598ab59667cf2861b8d79d8124f5d9598b06220e17c0529ec8dfd73b268b2",
+    "skills/task-handler/SKILL.md": "5fd7b91d9c646f6650d7e492d41aceafb043c700f1fecd9647fe7fb89bc575d7",
+    "skills/task-implement/SKILL.md": "c12cdb8be33dfafdc371cfc3b56b41ed95586036f6d819156020f9c712a920a4",
+    "skills/task-plan/SKILL.md": "d355f1b1f5d019d5c0ce66e0435386d3f429322283711b2d90faafc62c13a1ca",
+    "skills/task-refine/SKILL.md": "4cf64bbeda52cfd89302bb7d5bc8374cf9225c398f9be4d13843a3066237fb18",
+    "skills/task-review/SKILL.md": "0a5c0b9466ac3ea5097f740c53404b3996dc9e286619392db5ca739f8d79c147",
+    "skills/task-verify/SKILL.md": "4e4440d2c5a181c1223a71abe6f8aa630e424100d10929153aadb74795e493d3"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "aquarium",
+  "displayName": "Aquarium",
+  "version": "0.1.8",
+  "description": "Evidence-gated epic and task delivery with optional Podway v2 execution memory and safe development-tool setup for Claude Code.",
+  "author": {
+    "name": "Root Kernel",
+    "email": "cs@rootkernel.xyz",
+    "url": "https://home.rootkernel.xyz"
+  },
+  "homepage": "https://home.rootkernel.xyz",
+  "repository": "https://github.com/irootkernel/aquarium",
+  "license": "MIT",
+  "keywords": [
+    "roadmap",
+    "epic",
+    "task",
+    "orchestration",
+    "setup",
+    "testing",
+    "release",
+    "qa",
+    "review",
+    "deslop",
+    "lora",
+    "lore",
+    "sanho",
+    "mulgae",
+    "gaori",
+    "podway"
+  ],
+  "skills": "./skills/",
+  "metadata": {
+    "generatedFrom": "https://github.com/irootkernel/aquarium",
+    "brandColor": "#10C4BE",
+    "icon": "./assets/logo-small.png",
+    "logo": "./assets/logo-white.png",
+    "privacyPolicyURL": "https://github.com/irootkernel/aquarium/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/irootkernel/aquarium/blob/main/TERMS.md"
+  }
+}

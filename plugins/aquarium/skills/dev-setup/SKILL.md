@@ -1,6 +1,7 @@
 ---
 name: dev-setup
 description: "Diagnose and configure Aquarium repository tooling. Use when the user invokes /aquarium:dev-setup or asks to install, initialize, repair, or audit Sanho, Mulgae, Gaori, Podway, Lora, paired skills, MCP registrations, Config v3, provider profiles, or `CLAUDE.md` or `AGENTS.md` tool guidance. Do not use for routine supported Procedure v2 session observation, cancellation, discard, or reset; use /use-podway."
+disable-model-invocation: true
 ---
 
 # Development Setup

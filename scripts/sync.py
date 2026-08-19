@@ -2,7 +2,7 @@
 """Generate the Claude Code plugin from the pinned upstream Codex plugin.
 
 The upstream repository at `upstream/` is the single source of truth. This
-script performs a deterministic transformation into `plugins/root-kernel/`,
+script performs a deterministic transformation into `plugins/aquarium/`,
 which is committed so the plugin installs even when the submodule is absent.
 
 Run `sync.py` to regenerate, or `sync.py --check` to fail on drift.
@@ -24,15 +24,21 @@ from typing import Any
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 UPSTREAM = REPOSITORY / "upstream"
-UPSTREAM_PLUGIN = UPSTREAM / "plugins" / "root-kernel"
-OUTPUT = REPOSITORY / "plugins" / "root-kernel"
+UPSTREAM_PLUGIN = UPSTREAM / "plugins" / "aquarium"
+OUTPUT = REPOSITORY / "plugins" / "aquarium"
 OVERRIDES = REPOSITORY / "overrides"
 OVERRIDE_MANIFEST = OVERRIDES / "manifest.json"
+CODEX_EXEMPTIONS = OVERRIDES / "codex-exemptions.json"
 SYNC_MANIFEST = "sync-manifest.json"
 
-COPIED_DIRECTORIES = ("skills", "references", "assets")
+COPIED_DIRECTORIES = ("skills", "references", "assets", "hooks")
 TEXT_SUFFIXES = (".md",)
 SCRIPT_SUFFIXES = (".py",)
+DATA_SUFFIXES = (".json",)
+# Everything copied that host-specific text could hide in. `.yaml` is scanned but
+# never rewritten: the Podway procedure IDs are load-bearing identifiers, and the
+# integration contract requires the installed copies to match these bytes.
+SCANNED_SUFFIXES = TEXT_SUFFIXES + SCRIPT_SUFFIXES + DATA_SUFFIXES + (".yaml",)
 
 # Ordered literal substitutions applied to copied Markdown. Order matters: a
 # later rule must never rewrite text that an earlier rule already produced.
@@ -42,12 +48,15 @@ SCRIPT_SUFFIXES = (".py",)
 # corrupt into "nested CLAUDE.md, CLAUDE.md". Instruction-file wording is
 # handled by full-file overrides instead.
 SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
-    ("$root-kernel:", "/root-kernel:"),
+    ("$aquarium:", "/aquarium:"),
+    # `$use-podway`, `$use-sanho`, `$use-mulgae`, `$use-gaori`. A prefix rule
+    # covers the family and any later sibling; `/use-` cannot re-match it.
+    ("$use-", "/use-"),
     ("$lore-commits", "/lore-commits"),
     ("$lore-query", "/lore-query"),
     ("$orca-cli", "/orca-cli"),
     ("`request_user_input`", "`AskUserQuestion`"),
-    ("the Codex goal", "the Claude Code todo list"),
+    ("Codex goal", "Claude Code todo list"),
     ("a fresh Codex reviewer", "a fresh independent reviewer"),
     ("one fresh Codex reviewer", "one fresh independent reviewer"),
     ("supervised Codex reviewer", "supervised independent reviewer"),
@@ -61,6 +70,17 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("Configure it for Codex user-global scope.", "Configure it for the Claude Code user-global scope."),
     ("--agent codex", "--agent claude-code"),
     ("the Codex user-global skill directory", "the Claude Code user-global skill directory"),
+    ("Codex skill roots", "agent skill roots"),
+    ("a new Codex user-scoped", "a new user-scoped"),
+    (
+        "restart Codex so a new session loads the skill snapshot",
+        "restart Claude Code so a new session loads the skill snapshot",
+    ),
+    (
+        "restart Codex if the skill does not appear in the active session",
+        "restart Claude Code if the skill does not appear in the active session",
+    ),
+    ("will not load until Codex restarts", "will not load until Claude Code restarts"),
     (
         "the full Lore protocol into AGENTS.md",
         "the full Lore protocol into the repository instruction file",
@@ -90,6 +110,18 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        ]\n"
         "    )\n",
     ),
+    # `hooks/task_commit_gate.py` names the remediation skill in the text the
+    # user sees when a commit is denied. Markdown rules do not reach `.py`.
+    ("$aquarium:", "/aquarium:"),
+)
+
+# Substitutions for copied JSON. Claude Code expands `${CLAUDE_PLUGIN_ROOT}`;
+# `PLUGIN_ROOT` is a Codex-only spelling. Left alone, the shell expands it to
+# nothing, `python3` cannot open `/hooks/task_commit_gate.py`, and it exits 2 —
+# which PreToolUse reads as an unconditional deny. The bundled hook would then
+# block every Bash call in every repository, so this rule is load-bearing.
+DATA_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
+    ("${PLUGIN_ROOT}", "${CLAUDE_PLUGIN_ROOT}"),
 )
 
 # Text that must exist after transformation. A script substitution that quietly
@@ -98,17 +130,21 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
 REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
     ("skills/dev-setup/scripts/inspect_tools.py", "CLAUDE_CONFIG_DIR"),
     ("skills/dev-setup/scripts/inspect_tools.py", '".claude/skills"'),
+    ("hooks/hooks.json", "${CLAUDE_PLUGIN_ROOT}"),
+    ("hooks/task_commit_gate.py", "/aquarium:task-commit"),
 )
 
 # Strings that must not survive into the generated tree. Each entry pairs a
 # needle with the remedy, so a failure names its own fix.
 FORBIDDEN: tuple[tuple[str, str], ...] = (
-    ("$root-kernel:", "add a substitution rule"),
+    ("$aquarium:", "add a substitution rule"),
+    ("$use-", "add a substitution rule"),
     ("$lore-", "add a substitution rule"),
     ("$orca-cli", "add a substitution rule"),
     ("request_user_input", "add a substitution rule or an override"),
     ("--agent codex", "add an override"),
-    ("Codex", "add a substitution rule or an override"),
+    ("${PLUGIN_ROOT}", "Claude Code expands ${CLAUDE_PLUGIN_ROOT}; add a data substitution"),
+    ("Codex", "add a substitution rule, an override, or a reviewed exemption"),
 )
 
 
@@ -147,9 +183,31 @@ def require_upstream() -> None:
             f"upstream plugin not found at {marker}; "
             "run `git submodule update --init --recursive` before syncing"
         )
-    for name in ("skills",):
+    for name in ("skills", "hooks"):
         if not (UPSTREAM_PLUGIN / name).is_dir():
             raise SyncError(f"upstream is missing `{name}/`; refusing to generate")
+    check_upstream_directories()
+
+
+def check_upstream_directories() -> None:
+    """Refuse to generate when upstream grows a directory nobody decided about.
+
+    `COPIED_DIRECTORIES` is an allowlist with no counterpart check, so `hooks/`
+    appeared upstream and was dropped in silence. Whether a new directory belongs
+    in a Claude artifact is a decision, and skipping it is not a safe default.
+    """
+    known = set(COPIED_DIRECTORIES) | {".codex-plugin"}
+    unknown = sorted(
+        path.name
+        for path in UPSTREAM_PLUGIN.iterdir()
+        if path.is_dir() and path.name not in known
+    )
+    if unknown:
+        raise SyncError(
+            "upstream has directories this transformation does not handle: "
+            + ", ".join(unknown)
+            + "; add them to COPIED_DIRECTORIES or exclude them deliberately"
+        )
 
 
 def apply_substitutions(text: str) -> str:
@@ -237,6 +295,8 @@ def transform_text(destination: Path) -> None:
             rules = SUBSTITUTIONS
         elif path.suffix in SCRIPT_SUFFIXES:
             rules = SCRIPT_SUBSTITUTIONS
+        elif path.suffix in DATA_SUFFIXES:
+            rules = DATA_SUBSTITUTIONS
         else:
             continue
         original = path.read_text(encoding="utf-8")
@@ -259,10 +319,52 @@ def check_required(destination: Path) -> None:
         raise SyncError("required text is absent from the generated tree:\n" + "\n".join(missing))
 
 
+def upstream_manifest() -> dict[str, Any]:
+    return json.loads(
+        (UPSTREAM_PLUGIN / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )
+
+
 def load_override_manifest() -> dict[str, str]:
     if not OVERRIDE_MANIFEST.is_file():
         return {}
     return json.loads(OVERRIDE_MANIFEST.read_text(encoding="utf-8"))
+
+
+def check_codex_exemptions() -> set[str]:
+    """Return the paths whose remaining `Codex` mentions were reviewed and kept.
+
+    Some upstream text names the Codex CLI as a third-party tool rather than as
+    the host running the skill — a Mulgae provider, a required CLI version. That
+    text is correct in a Claude artifact and cannot be renamed without making it
+    false, but it still trips the `Codex` needle after an override is applied,
+    because overrides do not exempt their own content.
+
+    An exemption records that a human read every remaining mention in one file
+    and confirmed each is third-party. That judgement holds only for the bytes it
+    was made against, so an upstream edit stops the run instead of widening the
+    exemption in silence.
+    """
+    if not CODEX_EXEMPTIONS.is_file():
+        return set()
+    recorded_all: dict[str, str] = json.loads(CODEX_EXEMPTIONS.read_text(encoding="utf-8"))
+    for relative, recorded in sorted(recorded_all.items()):
+        source = UPSTREAM_PLUGIN / relative
+        if not source.is_file():
+            raise SyncError(
+                f"`Codex` exemption targets `{relative}`, which no longer exists "
+                "upstream; remove the exemption or retarget it"
+            )
+        current = digest(source)
+        if current != recorded:
+            raise SyncError(
+                f"`Codex` exemption stale: `{relative}` changed upstream\n"
+                f"  recorded {recorded}\n"
+                f"  current  {current}\n"
+                "re-read every remaining `Codex` mention, confirm each still names "
+                "the third-party CLI, then update overrides/codex-exemptions.json"
+            )
+    return set(recorded_all)
 
 
 def apply_overrides(destination: Path) -> list[str]:
@@ -303,9 +405,7 @@ def apply_overrides(destination: Path) -> list[str]:
 
 def write_plugin_manifest(destination: Path) -> None:
     """Derive the Claude manifest from the Codex one so versions cannot diverge."""
-    codex = json.loads(
-        (UPSTREAM_PLUGIN / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
-    )
+    codex = upstream_manifest()
     interface = codex.get("interface", {})
     manifest: dict[str, Any] = {
         "name": codex["name"],
@@ -335,26 +435,34 @@ def write_plugin_manifest(destination: Path) -> None:
     )
 
 
-def check_forbidden(destination: Path) -> None:
-    """Scan generated Markdown and the generated manifest for host-specific text.
+def check_forbidden(destination: Path, codex_exemptions: set[str]) -> None:
+    """Scan every generated text file for host-specific text.
 
-    Bundled scripts are excluded: they legitimately still read `CODEX_HOME`,
-    because a Claude Code user may also have Codex skills installed.
+    Scripts and YAML are included. `CODEX_HOME` survives in the inspection script
+    on purpose — a Claude Code user may also have Codex skills installed — and it
+    is not a match, because the needle is `Codex` rather than `CODEX`.
+
+    Only the `Codex` needle is skipped, and only for reviewed exemptions; every
+    other needle applies to every file.
     """
     failures: list[str] = []
     for path in sorted(destination.rglob("*")):
-        if not path.is_file() or path.suffix not in TEXT_SUFFIXES + (".json",):
+        if not path.is_file() or path.suffix not in SCANNED_SUFFIXES:
             continue
+        relative = path.relative_to(destination)
         text = path.read_text(encoding="utf-8")
         for needle, remedy in FORBIDDEN:
+            if needle == "Codex" and str(relative) in codex_exemptions:
+                continue
             if needle in text:
-                relative = path.relative_to(destination)
                 failures.append(f"  {relative}: contains `{needle}` — {remedy}")
     if failures:
         raise SyncError("host-specific text survived transformation:\n" + "\n".join(failures))
 
 
-def write_sync_manifest(destination: Path, commit: str, overrides: list[str]) -> None:
+def write_sync_manifest(
+    destination: Path, repository: str, commit: str, overrides: list[str]
+) -> None:
     files = {
         str(path.relative_to(destination)): digest(path)
         for path in sorted(destination.rglob("*"))
@@ -362,7 +470,7 @@ def write_sync_manifest(destination: Path, commit: str, overrides: list[str]) ->
     }
     payload = {
         "upstream": {
-            "repository": "https://github.com/irootkernel/root-kernel-dev-skills",
+            "repository": repository,
             "commit": commit,
         },
         "overrides": overrides,
@@ -375,6 +483,7 @@ def write_sync_manifest(destination: Path, commit: str, overrides: list[str]) ->
 
 def generate(destination: Path) -> tuple[str, list[str]]:
     commit = upstream_commit()
+    codex_exemptions = check_codex_exemptions()
     copy_tree(destination)
     transform_text(destination)
     # Overrides replace whole files, so they run before gating. Otherwise an
@@ -383,9 +492,9 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     overrides = apply_overrides(destination)
     transform_skills(destination)
     write_plugin_manifest(destination)
-    check_forbidden(destination)
+    check_forbidden(destination, codex_exemptions)
     check_required(destination)
-    write_sync_manifest(destination, commit, overrides)
+    write_sync_manifest(destination, upstream_manifest()["repository"], commit, overrides)
     return commit, overrides
 
 
@@ -411,13 +520,13 @@ def main() -> int:
     try:
         require_upstream()
         with tempfile.TemporaryDirectory() as temporary:
-            staged = Path(temporary) / "root-kernel"
+            staged = Path(temporary) / "aquarium"
             staged.mkdir()
             commit, overrides = generate(staged)
 
             if arguments.check:
                 if not OUTPUT.is_dir():
-                    print("error: plugins/root-kernel/ has not been generated", file=sys.stderr)
+                    print("error: plugins/aquarium/ has not been generated", file=sys.stderr)
                     return 1
                 drift = differences(OUTPUT, staged)
                 if drift:

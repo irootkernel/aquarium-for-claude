@@ -1,6 +1,7 @@
 ---
 name: independent-review
 description: "Run one or more supervised, read-only requirements and code reviews with fresh reviewer subagents, then adjudicate their findings and propose responses without making changes. Use when the user explicitly invokes /aquarium:independent-review with exactly one epic or task and asks to receive the independent review result."
+disable-model-invocation: true
 ---
 
 # Independent Review
