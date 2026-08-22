@@ -56,7 +56,7 @@ For an explicitly requested repair, load and follow the installed `/use-sanho` l
 
 Official source: `https://github.com/irootkernel/mulgae`
 
-Supported release line: stable `v0.1.16` through `v0.1.x`, native Apple Silicon macOS only. Resolve the newest non-draft, non-prerelease tag in that range. Use the same exact tag for the CLI and its optional `use-mulgae` skill; v0.1.15 lacks the prose-first structured-extraction contract, and do not automatically cross into `v0.2+`. Installation requires Go `1.26.6` or newer.
+Supported release line: stable `v0.1.17` through `v0.1.x`, native Apple Silicon macOS only. Resolve the newest non-draft, non-prerelease tag in that range. Use the same exact tag for the CLI and its optional `use-mulgae` skill; v0.1.16 lacks the v5 CLI envelope and event-driven MCP review lifecycle required by Aquarium, and do not automatically cross into `v0.2+`. Installation requires Go `1.26.6` or newer.
 
 Install an approved tag:
 
@@ -64,7 +64,7 @@ Install an approved tag:
 go install github.com/irootkernel/mulgae@<tag>
 ```
 
-The binary does not install the agent skill. Default setup diagnosis uses only `command -v mulgae`, `mulgae version --json`, and `mulgae doctor --output json`, plus effective MCP registration inspection when available. Require the `mulgae-command-result.v4` envelope and feature-detect `result.doctor.schema_version=mulgae-doctor-result.v2`. If Doctor v2 is absent, report the capability as unsupported; never fabricate failed dimensions or reconstruct them from `.mulgae/config.yaml` or `.mulgae/local.yaml`.
+The binary does not install the agent skill. Default setup diagnosis uses only `command -v mulgae`, `mulgae version --json`, and `mulgae doctor --output json`, plus effective MCP registration inspection when available. Require the `mulgae-command-result.v5` envelope and feature-detect `result.doctor.schema_version=mulgae-doctor-result.v2`. If Doctor v2 is absent, report the capability as unsupported; never fabricate failed dimensions or reconstruct them from `.mulgae/config.yaml` or `.mulgae/local.yaml`.
 
 Project Doctor v2 reports `config_v3`, `local_configuration`, `provider_identity`, `configured_readiness`, and `role_route_readiness` independently. Preserve its `verified`, `failed`, `unverifiable`, and `not_applicable` states and each configured `provider_inventory[]` row's `binary_available` and `cli_compatible` fields. Use `cli_compatible.eligibility` as Mulgae's provider-version decision; `newer_than_verified` remains ready when eligibility is `eligible`. Treat setup as configured only when `configured_readiness.state=ready` and `exit_code=0`. Do not gate or report setup on static evidence, heartbeat, historical reviews, or `review_qualified`, and never report native homes, executable paths, credential-profile homes, credentials, diagnostic messages, request IDs, timestamps, or raw provider output.
 
@@ -122,7 +122,7 @@ Mulgae v0.1.16 preserves the accepted Markdown report byte-for-byte, then may us
 
 Track `structured_extraction_status` as an evidence axis independent of review completion: `structured` means structured candidates were derived, `mixed` means only some accepted reports produced them, and `reports_only` means accepted reports remain authoritative without structured candidates. `reports_only` is not itself a failure and never replaces or relaxes capture coverage, CI decision, publication, findings-query, or unresolved-valid-finding requirements.
 
-Setup verification remains limited to version, Doctor v2, and effective MCP registration. The command envelope remains `mulgae-command-result.v4`, Doctor remains `mulgae-doctor-result.v2`, and preflight remains `mulgae-review-preflight.v3`; do not infer new setup probes from extraction support. Doctor's adapter-owned local version command is offline: it uses no credential projection, project working directory, provider API, or network request. Do not inspect config contents or runs, and do not invoke heartbeat, qualification, preflight, review, source transmission, or MCP startup to validate setup.
+Setup verification remains limited to version, Doctor v2, and effective MCP registration. The command envelope is `mulgae-command-result.v5`, Doctor remains `mulgae-doctor-result.v2`, and preflight remains `mulgae-review-preflight.v3`; do not infer new setup probes from extraction or lifecycle support. Doctor's adapter-owned local version command is offline: it uses no credential projection, project working directory, provider API, or network request. Do not inspect config contents or runs, and do not invoke heartbeat, qualification, preflight, review, source transmission, or MCP startup to validate setup.
 
 Heartbeat is outside setup. Only after a separate explicit user request acknowledging possible authentication, network access, cost, and remote logging may an agent propose `mulgae heartbeat --provider <family> --authorize-live-request --output json`, adding `--credential-profile <profile>` only for an explicitly selected named Codex configuration. Never add `--authorize-live-request` automatically. Require `mulgae-provider-heartbeat-result.v1` and preserve its typed `succeeded`, `provider_failure`, `timeout`, `authentication_failure`, `malformed_response`, or `execution_failure` status without retry. Do not promote success into offline readiness or review qualification. Without authorization, preserve Mulgae's `attempted=false` and `live_authorization_required` result.
 
@@ -148,11 +148,11 @@ Treat MCP as an optional, separately approved project-local component. For a tru
 }
 ```
 
-A project-scoped stdio entry supports `command`, `args`, and `env` only. Bind the canonical repository through the explicit `--project-root` argument rather than a working directory, and treat startup and tool timeouts as host settings rather than registration facts. Never invent unsupported keys to mirror another host's registration shape.
+A project-scoped stdio entry supports `command`, `args`, and `env` only. Bind the canonical repository through the explicit `--project-root` argument rather than a working directory, and treat startup and tool timeouts as host settings rather than registration facts. Never invent unsupported keys to mirror another host's registration shape. Mulgae admits a two-hour review deadline plus retry and finalization margin, so the host tool deadline must cover at least 7501 seconds; preserve any larger existing value.
 
 `.mcp.json` is shared project configuration, and each user approves its servers before the host connects to them. Show the complete diff and whether `.mcp.json` is already tracked before approval, and never stage or commit it during setup. Verify only the effective registration with `claude mcp get mulgae`: it must report stdio transport, resolve to the selected binary, and bind its exact `mcp --project-root <canonical-root>` arguments. That output is human-readable rather than typed, so record only what it states and never reconstruct an unreported property. A server still pending approval is unverified, not a mismatch.
 
-Tell the user to restart Claude Code so a new session can expose `preflight_review`, `run_review`, `list_runs`, `get_run`, `list_findings`, and verified report and finding resources. The attached MCP surface remains versioned independently; CLI fallback preflight must identify `mulgae-review-preflight.v3`.
+Tell the user to restart Claude Code so a new session can expose `preflight_review`, `start_review`, `await_review`, `cancel_review`, the foreground-compatible `run_review`, `list_runs`, `get_run`, `list_findings`, and verified report and finding resources. The v0.1.17 lifecycle starts exactly once and awaits the same process-local invocation without transferring observer cancellation to provider execution; use the foreground path atomically when any lifecycle tool is absent. The attached MCP surface remains versioned independently; CLI fallback preflight must identify `mulgae-review-preflight.v3`.
 
 Verify configuration, provider readiness, skill files, and MCP registration only. Do not start the MCP server or run heartbeat, review, qualification, preflight, follow-up, delta, rerun, report, export, or any command that captures, transmits, or writes review source or artifacts during setup. Mulgae owns its bounded same-provider retry; never add a downstream review, qualification, or heartbeat retry for a final typed failure.
 
@@ -160,7 +160,7 @@ Verify configuration, provider readiness, skill files, and MCP registration only
 
 Official source: `https://github.com/irootkernel/gaori`
 
-Supported release line: stable `v0.1.13` through `v0.1.x`. Resolve the newest non-draft, non-prerelease tag in that range. Use the same exact tag for the CLI and its optional `use-gaori` skill; v0.1.12 does not provide the required parser and completed-run discovery, bounded redaction measurement, rule-proposal inventory, or seven-tool MCP surface, and do not automatically cross into `v0.2+`.
+Supported release line: stable `v0.1.14` through `v0.1.x`. Resolve the newest non-draft, non-prerelease tag in that range. Use the same exact tag for the CLI and its optional `use-gaori` skill; v0.1.13 lacks the terminal-only `await_run` surface required by Aquarium, and do not automatically cross into `v0.2+`.
 
 Install an approved tag:
 
@@ -174,7 +174,7 @@ For a new user-scoped skill installation, use only these files from the automati
 
 If the target already exists, compare it with the verified source, show the complete diff, follow the shared backup policy, and obtain separate replacement approval. Under the no-backup policy, remove only the exact approved target after the incoming file set is fully verified; disclose that local modifications will not be recoverable from the release ref. Never overwrite, merge, delete, or repair another discovered copy silently. After installation or replacement, tell the user to restart Claude Code if the skill does not appear in the active session.
 
-Discover required checks from repository instructions, task runners, manifests, and CI before proposing `.gaori/tester.yaml` schema version 2. Map each configured command ID to an existing argv array, non-empty tags, explicit parser, and timeout. Use `gaori --json parsers list` as the authoritative live registry before selecting a parser. The v0.1.13 registry has fifteen labels; `dotnet-test` and `gradle-test` are Experimental and their bounded summaries may require manual confirmation. Use `gaori --json parsers detect <raw-log>` only to diagnose an explicitly selected existing log: it reports candidates without selecting a parser, loading configuration, creating evidence, or changing the command result. Do not add secrets, absolute paths, or machine-specific arguments to portable configuration.
+Discover required checks from repository instructions, task runners, manifests, and CI before proposing `.gaori/tester.yaml` schema version 2. Map each configured command ID to an existing argv array, non-empty tags, explicit parser, and timeout. Use `gaori --json parsers list` as the authoritative live registry before selecting a parser. The v0.1.14 registry has fifteen labels; `dotnet-test` and `gradle-test` are Experimental and their bounded summaries may require manual confirmation. Use `gaori --json parsers detect <raw-log>` only to diagnose an explicitly selected existing log: it reports candidates without selecting a parser, loading configuration, creating evidence, or changing the command result. Do not add secrets, absolute paths, or machine-specific arguments to portable configuration.
 
 Gaori is an optional execution and evidence-compression wrapper; it does not create a new test gate, change command authorization, override the child process exit status, or grant acceptance. Keep runtime state local while allowing Git to track portable config and reviewed active rules. Replace a blanket `.gaori/` ignore entry only through an approved exact diff:
 
@@ -205,18 +205,22 @@ Treat MCP as an optional, separately approved project-local component. For a tru
 }
 ```
 
-Show the complete diff and whether `.mcp.json` is already tracked before approval. Never stage it during setup. Verify only the effective registration with `claude mcp get gaori`; do not start the server or a test. Report unresolvable-command, non-stdio, and wrong-repository entries as degraded, and report a server still pending approval as unverified rather than degraded. Tell the user to restart Claude Code so a new session can expose `start_configured_run`, `start_ad_hoc_run`, `get_run`, `wait_run`, `cancel_run`, `get_excerpt`, and the read-only `list_runs` completed-evidence inventory. `list_runs` is stateless and cannot recover an invocation ID or reattach a disconnected run.
+Show the complete diff and whether `.mcp.json` is already tracked before approval. Never stage it during setup. Verify only the effective registration with `claude mcp get gaori`; do not start the server or a test. Gaori needs a host tool deadline of at least 3601 seconds so it exceeds a one-hour command and evidence finalization; preserve any larger existing value. Report unresolvable-command, non-stdio, and wrong-repository entries as degraded, and report a server still pending approval as unverified rather than degraded. Tell the user to restart Claude Code so a new session can expose `start_configured_run`, `start_ad_hoc_run`, `get_run`, `wait_run`, terminal-only `await_run`, `cancel_run`, `get_excerpt`, and the read-only `list_runs` completed-evidence inventory. `await_run` observes one process-local invocation without cancelling execution when that observer ends; use `get_run` or bounded `wait_run` when the host deadline cannot safely cover terminal completion. `list_runs` is stateless and cannot recover an invocation ID or reattach a disconnected run.
 
 ## Lora / Lore
 
 Official source: `https://github.com/tmdgusya/lora`
 
-Lora distributes agent skills rather than a runtime service. Configure it for the Claude Code user-global scope. Resolve the latest stable tag when one exists; otherwise resolve the full current `main` commit SHA and disclose that fallback before approval.
+Lora distributes agent skills rather than a runtime service. Configure it for the Claude Code user-global scope. Resolve the latest stable tag when one exists; otherwise resolve the full current `main` commit SHA and disclose that fallback before approval. Because `npx skills add <repository>#<full-sha>` treats the SHA as a branch name, prepare a temporary detached checkout at the approved commit and install from that local source instead.
 
 Install only the two compatible skills from the approved ref:
 
 ```bash
-npx skills add https://github.com/tmdgusya/lora#<tag-or-full-sha> \
+git clone --filter=blob:none --no-checkout https://github.com/tmdgusya/lora <temporary-source-root>/lora
+git -C <temporary-source-root>/lora fetch --depth=1 origin <approved-tag-or-full-sha>
+git -C <temporary-source-root>/lora checkout --detach FETCH_HEAD
+git -C <temporary-source-root>/lora rev-parse HEAD
+npx skills add <temporary-source-root>/lora \
   --skill lore-commits \
   --skill lore-query \
   --global \
@@ -225,9 +229,35 @@ npx skills add https://github.com/tmdgusya/lora#<tag-or-full-sha> \
   --yes
 ```
 
-This command contacts npm and GitHub and writes under the Claude Code user-global skill directory. Do not install or invoke Lora's `lore-setup`; it copies the full Lore protocol into the repository instruction file and conflicts with the reference-and-override policy. If `lore-setup` is already installed, report it without removing or rewriting it.
+The clone and fetch contact GitHub, and `npx` contacts npm and writes under the Claude Code user-global skill directory. Require the detached `HEAD` to equal the approved ref before installation. Do not install or invoke Lora's `lore-setup`; it copies the full Lore protocol into the repository instruction file and conflicts with the reference-and-override policy. If `lore-setup` is already installed, report it without removing or rewriting it.
 
 Before updating an existing `lore-commits` or `lore-query`, compare its complete installed file set with the approved source, show the target and diff, and apply the shared backup policy before the approved `npx skills add` action. Under the no-backup policy, disclose that local modifications will not be recoverable from the source ref. Verify that `lore-commits/SKILL.md` and `lore-query/SKILL.md` exist, have valid frontmatter, and match the approved source ref. Do not treat installation as commit authority.
+
+## Cursor Team Kit / Deslop
+
+Official source: `https://github.com/cursor/plugins`
+
+Deslop is a separately installed upstream prerequisite, not an Aquarium skill. This integration has no supported skill-specific release line, so resolve and disclose the full current `main` commit SHA through official GitHub commit metadata, then prepare a temporary detached checkout at that exact commit. Never install from a moving `main` or use a full SHA as an `npx skills` URL fragment.
+
+Install only the upstream Deslop skill from the approved checkout and preserve its parent plugin's MIT notice:
+
+```bash
+git clone --filter=blob:none --no-checkout https://github.com/cursor/plugins <temporary-source-root>/cursor-plugins
+git -C <temporary-source-root>/cursor-plugins fetch --depth=1 origin <approved-full-sha>
+git -C <temporary-source-root>/cursor-plugins checkout --detach FETCH_HEAD
+git -C <temporary-source-root>/cursor-plugins rev-parse HEAD
+npx skills add <temporary-source-root>/cursor-plugins/cursor-team-kit \
+  --skill deslop \
+  --global \
+  --agent claude-code \
+  --copy \
+  --yes
+install -m 0644 <temporary-source-root>/cursor-plugins/cursor-team-kit/LICENSE ~/.agents/skills/deslop/LICENSE
+```
+
+The clone and fetch contact GitHub, and `npx` contacts npm and writes `~/.agents/skills/deslop`. Show every endpoint, command, approved SHA, target, source digest, and expected file before installation approval. Verify that the installed `SKILL.md` and LICENSE are byte-identical to the detached checkout, the frontmatter is exactly `name: deslop`, the target contains no extra files, and no duplicate or symlink installation exists in another agent skill root.
+
+If the target exists, compare its complete tree with the approved source plus LICENSE, show the complete diff, apply the shared backup policy, and obtain separate replacement approval. Never merge an Aquarium variant or local customization into the upstream payload. After installation or replacement, clean up the ephemeral checkout when possible and tell the user to restart Claude Code before resuming the requesting Aquarium workflow.
 
 ## Podway
 
@@ -258,13 +288,13 @@ The LaunchAgent runs after GUI login under the same OS user and is not a multi-u
 
 Treat that bounded inventory as readiness evidence only. Never use dev-setup to observe, cancel, discard, or reset a routine supported Procedure v2 current session; return an exact standalone `/use-podway` lifecycle request instead. Keep `LEGACY_PROCEDURE_STATE_UNSUPPORTED` and its separately approved workspace-wide `podway reset --all` recovery as the only session-state reset exception in this catalog.
 
-Repository initialization and Aquarium readiness configuration require another approval. `podway init` creates `.podway/config.yaml` and `.podway/.gitignore` for the repository to track, plus ignored `.podway/runtime/`. Copy the three plugin-owned Procedure v2 sources to `.podway/procedures/` byte-for-byte and validate each with:
+Repository initialization and Aquarium readiness configuration require another approval. `podway init` creates `.podway/config.yaml` and `.podway/.gitignore` for the repository to track, plus ignored `.podway/runtime/`. Copy the five plugin-owned Procedure v2 sources to `.podway/procedures/` byte-for-byte and validate each with:
 
 ```bash
 podway procedure check --warnings-as-errors <procedure-file>
 ```
 
-The three required IDs are `aquarium-task-v2`, `aquarium-goal-v2`, and `aquarium-validation-v2`. Their presence describes readiness, never workflow activation. All absent means `readiness_status=not_configured`; all present, tracked in Git, byte-identical, valid, and healthy means `readiness_status=ready`; partial, drifted, invalid, unsupported, or unhealthy state means `readiness_status=degraded`. The v3 inspection omits Podway unless invoked with `--include-podway`.
+The five required IDs are `aquarium-task-v2`, `aquarium-goal-v2`, `aquarium-validation-v2`, `aquarium-design-v2`, and `aquarium-war-room-v2`. Their presence describes readiness, never workflow activation. All absent means `readiness_status=not_configured`; all present, tracked in Git, byte-identical, valid, and healthy means `readiness_status=ready`; partial, drifted, invalid, unsupported, or unhealthy state means `readiness_status=degraded`. The v6 inspection omits Podway unless invoked with `--include-podway`.
 
 Updating a tracked copy requires showing and approving its exact diff and applying the shared backup policy; an active session retains its immutable snapshot.
 
@@ -273,3 +303,17 @@ The renamed inspector reports `migration_required=true` when any tracked or untr
 `LEGACY_PROCEDURE_STATE_UNSUPPORTED` has a different meaning: the runtime contains Procedure v1 task state. Do not convert, edit, or delete that state automatically. Report the exact worktree and error and apply the shared backup policy before separately proposing the supported `podway reset --all` recovery. Under the no-backup policy, disclose that the reset permanently deletes the legacy runtime history and that Git cannot restore it, then require separate explicit approval.
 
 Podway v0.2.5 also preserves explicit confirmed `podway reset --all` recovery when the workspace binding is readable but disposable full-store openability or internal-codec inspection fails. Treat that condition as degraded, preserve the exact stable error evidence, apply the shared backup policy, and require a separate reset proposal and explicit approval; recoverability never grants deletion authority.
+
+## Ouroboros
+
+Official source: `https://github.com/Q00/ouroboros`
+
+Python package: `ouroboros-ai`. Support only `>=0.51.1,<0.52.0`; do not automatically cross into `0.52+`. Installation requires an existing `uv` and one resolved exact package version. Show the Python package index request, exact version, package target, and `uv tool install ouroboros-ai==<exact-version>` or exact approved upgrade command before separate approval. Never install `uv` as a side effect and never install an unpinned range.
+
+Diagnose four independent components with the v6 inspector's explicit `--include-ouroboros` flag: `ooo --version`, `ooo codex doctor`, `ooo mcp doctor --json`, and an effective MCP registration probe. These probes are local and read-only: they do not contact a provider, initiate authentication, or make a network request, though the MCP doctor may inspect bounded local authentication-readiness metadata without exposing credential material. A healthy CLI does not prove that the installed host skills are present, that the MCP runtime is ready, or that this host has an enabled registration. The bundled inspector probes the upstream host's artifacts and registration, so establish the Claude Code side separately: verify the effective registration with `claude mcp get`, using the plugin-scoped name `plugin:ouroboros:ouroboros` when Ouroboros is installed as a Claude Code plugin and the plain `ouroboros` name when it is registered directly.
+
+The inspector probes that registration even when `ooo` is absent. Registration is `configured` only for a valid enabled entry, `missing` only for a definite named-server-not-found response, `degraded` for disabled, incomplete, malformed, timed-out, or failed probes, and `unverifiable` when the probed CLI is itself absent. Report only the normalized status and reason code; never expose raw registration stderr or configuration secrets.
+
+Package installation, `ooo setup refresh`, and `ooo setup --runtime claude --non-interactive` are three separate persistent mutations with separate approvals. The refresh rewrites the rules, skills, bridges, and instruction guides a previous setup already installed for every detected runtime, without changing MCP registration, the runtime selection, or `~/.ouroboros/config.yaml`. Runtime setup may change host integration artifacts and Ouroboros runtime state; omit `--mcp-mode`, which selects another host's MCP configuration mode. Re-read exact targets before each approved mutation and stop if they changed.
+
+No setup action authorizes a provider call, authentication, repository-source transmission, `auto`, `run`, `ralph`, `evolve`, Seed creation, or an Aquarium design workflow. Verify only version, the integration doctor, MCP doctor, effective registration, and, when safely observable in the active host, live MCP tool exposure. A Claude Code restart may be required after skill or MCP changes.

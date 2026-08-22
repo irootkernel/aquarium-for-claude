@@ -98,6 +98,20 @@ Pathname.glob(PLUGIN.join("**/*.{md,json,py,yaml}")).sort.each do |path|
   end
 end
 
+# `FORBIDDEN_TEXT` names one needle per sigil family that already exists, so a
+# family upstream introduces later passes it and ships Codex invocation syntax
+# in silence. Uppercase spellings are environment variables and do not match.
+SIGIL = /\$[a-z][a-z0-9:_-]*/.freeze
+
+Pathname.glob(PLUGIN.join("**/*.md")).sort.each do |path|
+  found = path.read.scan(SIGIL).uniq.sort
+  assert(
+    found.empty?,
+    "generated text contains Codex skill sigils #{found.join(', ')}: " \
+    "#{path.relative_path_from(PLUGIN)}"
+  )
+end
+
 assert(
   skill_paths.any? { |path| path.read.include?("/aquarium:") },
   "generated skills never reference the Claude invocation form"

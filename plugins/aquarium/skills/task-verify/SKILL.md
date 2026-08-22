@@ -8,6 +8,10 @@ disable-model-invocation: true
 
 Verify the implemented task established by `/aquarium:task-handler`. When invoked directly, require the repository, roadmap path, task ID, approved requirements, and exact task-owned diff.
 
+Read [design-gates.md](../../references/design-gates.md). Resolve the effective Design Gate impact from the task first and then its parent epic, applying the documented legacy-only `Not required` rule when neither marker exists. Stop when the effective marker is missing in an enrolled repository or is `Pending`.
+
+For every inherited or task-explicit resolved active `GATE-*` ID, run its registered local offline procedure against the exact task snapshot with declared outputs and caches redirected to a disposable root, capture the objective pass condition and outcome, and verify that source-repository status is unchanged. Keep missing, stale, failed, mutating, or unexecutable gate evidence as a verification blocker.
+
 ## Build the Requirement-to-Test Matrix
 
 Build a requirement-to-test matrix from the roadmap rather than assuming fixed test folders. Consider only applicable layers:
@@ -33,7 +37,11 @@ Before running a check, account for current user-run evidence:
 
 Run focused checks first, then repository-required broader gates. Treat the underlying process exit status as authoritative when Gaori or another evidence-compression wrapper is used. If an applicable E2E gate cannot run under repository policy or the current environment, request or accept explicit user-run evidence and keep the phase incomplete until it exists. Stop and escalate to the orchestrator when a required gate is permanently blocked by repository policy, environment, or authority; never substitute a narrower check for it.
 
-When a selected long or noisy check is routed through Gaori, reference `/use-gaori` and follow its current CLI-or-MCP workflow when available. The installed skill decides between all connected Gaori MCP tools, including read-only `list_runs` discovery for completed standalone evidence, and the CLI fallback; do not reconstruct its execution, cancellation, cleanup, artifact, or recovery procedure here.
+When a selected long or noisy check is routed through Gaori, reference `/use-gaori` and follow its current CLI-or-MCP workflow when available.
+
+- Prefer one `start_configured_run` or `start_ad_hoc_run` followed by `await_run` on the same invocation when the complete tool surface is connected and the effective host timeout covers the command plus evidence finalization.
+- When that deadline is missing, unverified, or inadequate, preserve the invocation and use `get_run` or bounded `wait_run` observation instead. Never repeat the start merely because an await was cancelled or timed out.
+- The installed skill owns read-only `list_runs` discovery for completed standalone evidence and the CLI fallback. Do not reconstruct its execution, cancellation, cleanup, artifact, or recovery procedure here.
 
 If the skill is unavailable and repository guidance requires it, return an exact `/aquarium:dev-setup` continuation request. Otherwise run the repository's original documented test command directly and report that Gaori evidence compression was unavailable; if the original command cannot be established from repository authority, leave an evidence gap instead of inferring it from conversation memory.
 

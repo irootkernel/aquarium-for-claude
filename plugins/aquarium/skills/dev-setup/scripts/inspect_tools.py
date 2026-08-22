@@ -15,9 +15,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = "aquarium-dev-setup-inspection.v4"
-MULGAE_COMMAND_RESULT_SCHEMA = "mulgae-command-result.v4"
+SCHEMA_VERSION = "aquarium-dev-setup-inspection.v6"
+MULGAE_COMMAND_RESULT_SCHEMA = "mulgae-command-result.v5"
 MULGAE_DOCTOR_RESULT_SCHEMA = "mulgae-doctor-result.v2"
+MULGAE_MCP_TOOL_TIMEOUT_SEC = 7501
+GAORI_MCP_TOOL_TIMEOUT_SEC = 3601
 CONFLICT_STATUSES = {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}
 SANHO_SKILL_FILES = (
     "SKILL.md",
@@ -47,6 +49,8 @@ PODWAY_PROCEDURES = (
     "aquarium-task-v2.yaml",
     "aquarium-goal-v2.yaml",
     "aquarium-validation-v2.yaml",
+    "aquarium-design-v2.yaml",
+    "aquarium-war-room-v2.yaml",
 )
 LEGACY_PODWAY_PROCEDURES = (
     "root-kernel-task-v2.yaml",
@@ -185,14 +189,14 @@ def supported_gaori_version(version: str | None) -> bool:
     if not version:
         return False
     match = re.fullmatch(r"v?0\.1\.(\d+)", version)
-    return bool(match and int(match.group(1)) >= 13)
+    return bool(match and int(match.group(1)) >= 14)
 
 
 def supported_mulgae_version(version: str | None) -> bool:
     if not version:
         return False
     match = re.fullmatch(r"v?0\.1\.(\d+)", version)
-    return bool(match and int(match.group(1)) >= 16)
+    return bool(match and int(match.group(1)) >= 17)
 
 
 def supported_mulgae_go_version(version: str | None) -> bool:
@@ -200,6 +204,23 @@ def supported_mulgae_go_version(version: str | None) -> bool:
         return False
     match = re.fullmatch(r"go(\d+)\.(\d+)\.(\d+)", version)
     return bool(match and tuple(map(int, match.groups())) >= (1, 26, 6))
+
+
+def supported_ouroboros_version(version: str | None) -> bool:
+    if not version:
+        return False
+    match = re.fullmatch(r"v?0\.51\.(\d+)", version)
+    return bool(match and int(match.group(1)) >= 1)
+
+
+def ouroboros_version_from_output(output: str) -> str | None:
+    plain = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
+    match = re.search(
+        r"\bOuroboros\b.*?\bversion\s+v?(\d+\.\d+\.\d+)\b",
+        plain,
+        re.IGNORECASE | re.DOTALL,
+    )
+    return match.group(1) if match else None
 
 
 def file_sha256(path: Path) -> str | None:
@@ -349,6 +370,54 @@ def normalized_probe(probe: dict[str, Any]) -> dict[str, Any]:
     if probe.get("reason"):
         normalized["reason"] = probe["reason"]
     return normalized
+
+
+def classify_ouroboros_registration(
+    raw_probe: dict[str, Any],
+) -> dict[str, Any]:
+    probe = {
+        key: raw_probe[key] for key in ("attempted", "ok", "exit_code", "timed_out")
+    }
+    if raw_probe["timed_out"]:
+        probe["reason"] = "registration_probe_timed_out"
+        return {"status": "degraded", "probe": probe}
+    if raw_probe.get("error_code"):
+        probe["error_code"] = raw_probe["error_code"]
+        probe["reason"] = "registration_probe_failed"
+        return {"status": "degraded", "probe": probe}
+
+    stderr = raw_probe.get("stderr", "").strip()
+    if not raw_probe["ok"]:
+        not_found = re.fullmatch(
+            r"(?:Error:\s*)?No MCP server named ['\"]?ouroboros['\"]? found\.?",
+            stderr,
+        )
+        probe["reason"] = (
+            "registration_not_found" if not_found else "registration_probe_failed"
+        )
+        return {
+            "status": "missing" if not_found else "degraded",
+            "probe": probe,
+        }
+
+    parsed = parse_json_probe(raw_probe)
+    if parsed.get("error_code") == "invalid_json":
+        probe["error_code"] = "invalid_json"
+        probe["reason"] = "registration_invalid_json"
+        return {"status": "degraded", "probe": probe}
+    result = parsed.get("result")
+    if not isinstance(result, dict):
+        probe["reason"] = "registration_result_invalid"
+        return {"status": "degraded", "probe": probe}
+    if result.get("enabled") is True:
+        return {"status": "configured", "probe": probe}
+    if result.get("enabled") is False:
+        probe["reason"] = "registration_disabled"
+    elif "enabled" not in result:
+        probe["reason"] = "registration_enabled_missing"
+    else:
+        probe["reason"] = "registration_enabled_invalid"
+    return {"status": "degraded", "probe": probe}
 
 
 def selected_fields(value: Any, names: tuple[str, ...]) -> dict[str, Any]:
@@ -976,7 +1045,7 @@ def inspect_mulgae_mcp(
     tool_supported = (
         isinstance(tool_timeout, (int, float))
         and not isinstance(tool_timeout, bool)
-        and tool_timeout >= 54000
+        and tool_timeout >= MULGAE_MCP_TOOL_TIMEOUT_SEC
     )
     binary_matches = bool(
         resolved_command
@@ -1242,7 +1311,11 @@ def inspect_gaori_mcp(
         server_mode = bool(args and args[-1] == "mcp")
 
     tool_timeout = result.get("tool_timeout_sec")
-    timeout_supported = tool_timeout in (None, 60)
+    timeout_supported = (
+        isinstance(tool_timeout, (int, float))
+        and not isinstance(tool_timeout, bool)
+        and tool_timeout >= GAORI_MCP_TOOL_TIMEOUT_SEC
+    )
     binary_matches = bool(
         resolved_command
         and gaori_executable
@@ -1360,16 +1433,36 @@ def inspect_lora() -> dict[str, Any]:
     expected_names = ("lore-commits", "lore-query", "lore-setup")
     skills: dict[str, dict[str, Any]] = {}
     for name in expected_names:
-        paths = [root.joinpath(name, "SKILL.md") for root in skill_roots()]
-        matches = [path for path in paths if path.is_file()]
+        installations: list[dict[str, Any]] = []
+        for root in skill_roots():
+            skill_directory = root.joinpath(name)
+            skill_path = skill_directory.joinpath("SKILL.md")
+            if not (skill_directory.exists() or skill_directory.is_symlink()):
+                continue
+            installations.append(
+                {
+                    "location": str(skill_directory),
+                    "skill_file_present": skill_path.is_file(),
+                    "frontmatter_valid": skill_path.is_file()
+                    and frontmatter_name(skill_path) == name,
+                    "symlinked": skill_directory.is_symlink()
+                    or skill_path.is_symlink(),
+                }
+            )
         skills[name] = {
-            "present": bool(matches),
-            "locations": [str(path) for path in matches],
-            "frontmatter_valid": bool(matches)
-            and all(frontmatter_name(path) == name for path in matches),
+            "present": bool(installations),
+            "duplicate": len(installations) > 1,
+            "locations": [entry["location"] for entry in installations],
+            "frontmatter_valid": bool(installations)
+            and all(entry["frontmatter_valid"] for entry in installations),
+            "symlinked": any(entry["symlinked"] for entry in installations),
+            "installations": installations,
         }
     required_ready = all(
-        skills[name]["present"] and skills[name]["frontmatter_valid"]
+        len(skills[name]["installations"]) == 1
+        and skills[name]["installations"][0]["skill_file_present"]
+        and skills[name]["frontmatter_valid"]
+        and not skills[name]["symlinked"]
         for name in ("lore-commits", "lore-query")
     )
     any_present = any(skill["present"] for skill in skills.values())
@@ -1387,6 +1480,140 @@ def inspect_lora() -> dict[str, Any]:
         "configuration": [],
         "probes": {},
     }
+
+
+def inspect_deslop() -> dict[str, Any]:
+    name = "deslop"
+    installations: list[dict[str, Any]] = []
+    for root in skill_roots():
+        skill_directory = root.joinpath(name)
+        skill_path = skill_directory.joinpath("SKILL.md")
+        license_path = skill_directory.joinpath("LICENSE")
+        if not (skill_directory.exists() or skill_directory.is_symlink()):
+            continue
+        symlinked = (
+            skill_directory.is_symlink()
+            or skill_path.is_symlink()
+            or license_path.is_symlink()
+        )
+        installations.append(
+            {
+                "location": str(skill_directory),
+                "skill_file_present": skill_path.is_file(),
+                "license_file_present": license_path.is_file(),
+                "frontmatter_valid": skill_path.is_file()
+                and frontmatter_name(skill_path) == name,
+                "symlinked": symlinked,
+            }
+        )
+
+    ready = (
+        len(installations) == 1
+        and installations[0]["skill_file_present"]
+        and installations[0]["license_file_present"]
+        and installations[0]["frontmatter_valid"]
+        and not installations[0]["symlinked"]
+    )
+    return {
+        "catalog_status": "active",
+        "setup_supported": True,
+        "installed": ready,
+        "executable": None,
+        "version": None,
+        "status": "configured"
+        if ready
+        else ("degraded" if installations else "missing"),
+        "agent_skill": {
+            "present": bool(installations),
+            "duplicate": len(installations) > 1,
+            "installations": installations,
+        },
+        "configuration": [],
+        "probes": {},
+    }
+
+
+def inspect_ouroboros(repository: Path, timeout_seconds: float) -> dict[str, Any]:
+    tool = base_tool("ooo")
+    tool["supported_range"] = ">=0.51.1,<0.52.0"
+    codex = shutil.which("codex")
+    if codex:
+        registration_raw = run_command(
+            [
+                str(Path(codex).resolve()),
+                "mcp",
+                "get",
+                "ouroboros",
+                "--json",
+            ],
+            repository,
+            timeout_seconds,
+        )
+        tool["mcp_registration"] = classify_ouroboros_registration(
+            registration_raw
+        )
+    else:
+        tool["mcp_registration"] = {
+            "status": "unverifiable",
+            "probe": skipped_probe("codex_executable_missing"),
+        }
+
+    if not tool["installed"]:
+        tool["version_supported"] = False
+        tool["probes"]["version"] = skipped_probe("executable_missing")
+        tool["codex_integration"] = {
+            "status": "missing",
+            "probe": skipped_probe("executable_missing"),
+        }
+        tool["mcp_runtime"] = {
+            "status": "missing",
+            "probe": skipped_probe("executable_missing"),
+        }
+        return tool
+
+    version_raw = run_command(
+        [tool["executable"], "--version"], repository, timeout_seconds
+    )
+    tool["version"] = ouroboros_version_from_output(
+        f"{version_raw.get('stdout', '')}\n{version_raw.get('stderr', '')}"
+    )
+    tool["version_supported"] = version_raw["ok"] and supported_ouroboros_version(
+        tool["version"]
+    )
+    tool["probes"]["version"] = {
+        key: version_raw[key]
+        for key in ("attempted", "ok", "exit_code", "timed_out")
+    }
+
+    codex_doctor = run_command(
+        [tool["executable"], "codex", "doctor"], repository, timeout_seconds
+    )
+    tool["codex_integration"] = {
+        "status": "configured" if codex_doctor["ok"] else "degraded",
+        "probe": {
+            key: codex_doctor[key]
+            for key in ("attempted", "ok", "exit_code", "timed_out")
+        },
+    }
+
+    mcp_doctor = json_probe(
+        [tool["executable"], "mcp", "doctor", "--json"],
+        repository,
+        timeout_seconds,
+    )
+    tool["mcp_runtime"] = {
+        "status": "configured" if mcp_doctor["ok"] else "degraded",
+        "probe": normalized_probe(mcp_doctor),
+    }
+
+    components_ready = (
+        tool["version_supported"]
+        and tool["codex_integration"]["status"] == "configured"
+        and tool["mcp_runtime"]["status"] == "configured"
+        and tool["mcp_registration"]["status"] == "configured"
+    )
+    tool["status"] = "configured" if components_ready else "degraded"
+    return tool
 
 
 def inspect_podway(repository: Path, timeout_seconds: float) -> dict[str, Any]:
@@ -1641,6 +1868,7 @@ def inspect(
     requested_path: str,
     timeout_seconds: float,
     include_podway: bool = False,
+    include_ouroboros: bool = False,
     require_mulgae_mcp: bool = False,
 ) -> dict[str, Any]:
     repository = resolve_repository(requested_path, timeout_seconds)
@@ -1651,9 +1879,12 @@ def inspect(
         ),
         "gaori": inspect_gaori(repository, timeout_seconds),
         "lora": inspect_lora(),
+        "deslop": inspect_deslop(),
     }
     if include_podway:
         tools["podway"] = inspect_podway(repository, timeout_seconds)
+    if include_ouroboros:
+        tools["ouroboros"] = inspect_ouroboros(repository, timeout_seconds)
     return {
         "schema_version": SCHEMA_VERSION,
         "repository": repository_inventory(repository, timeout_seconds),
@@ -1676,6 +1907,11 @@ def parse_arguments() -> argparse.Namespace:
         "--include-podway",
         action="store_true",
         help="Include explicitly requested Podway readiness diagnostics",
+    )
+    parser.add_argument(
+        "--include-ouroboros",
+        action="store_true",
+        help="Include explicitly requested Ouroboros integration diagnostics",
     )
     parser.add_argument(
         "--require-mulgae-mcp",
@@ -1703,6 +1939,7 @@ def main() -> int:
                 arguments.repository,
                 arguments.timeout_seconds,
                 include_podway=arguments.include_podway,
+                include_ouroboros=arguments.include_ouroboros,
                 require_mulgae_mcp=arguments.require_mulgae_mcp,
             )
         )

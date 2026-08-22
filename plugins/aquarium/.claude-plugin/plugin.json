@@ -1,8 +1,8 @@
 {
   "name": "aquarium",
   "displayName": "Aquarium",
-  "version": "0.1.8",
-  "description": "Evidence-gated epic and task delivery with optional Podway v2 execution memory and safe development-tool setup for Claude Code.",
+  "version": "0.1.9",
+  "description": "Ouroboros-assisted design, durable gates, and evidence-gated delivery with optional Podway v2 execution memory.",
   "author": {
     "name": "Root Kernel",
     "email": "cs@rootkernel.xyz",
@@ -27,7 +27,9 @@
     "sanho",
     "mulgae",
     "gaori",
-    "podway"
+    "podway",
+    "ouroboros",
+    "design"
   ],
   "skills": "./skills/",
   "metadata": {

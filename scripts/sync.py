@@ -55,6 +55,15 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("$lore-commits", "/lore-commits"),
     ("$lore-query", "/lore-query"),
     ("$orca-cli", "/orca-cli"),
+    # Ouroboros installs as a Claude Code plugin, so its skills carry the
+    # `ouroboros:` namespace. Codex installs them user-scoped and addresses them
+    # bare, which is why upstream writes `$interview` rather than a prefixed
+    # form. Deslop installs user-scoped on both hosts and keeps a bare name.
+    ("$interview", "/ouroboros:interview"),
+    ("$deslop", "/deslop"),
+    ("$seed", "/ouroboros:seed"),
+    ("$pm", "/ouroboros:pm"),
+    ("$qa", "/ouroboros:qa"),
     ("`request_user_input`", "`AskUserQuestion`"),
     ("Codex goal", "Claude Code todo list"),
     ("a fresh Codex reviewer", "a fresh independent reviewer"),
@@ -64,13 +73,23 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("fresh Codex audit", "fresh from-scratch audit"),
     ("direct Codex audit", "direct from-scratch audit"),
     (" for Codex.", " for Claude Code."),
+    # Ouroboros registers its skills with the host agent, so the component whose
+    # health `dev-setup` establishes is the Claude Code one here. The bundle
+    # skill names the same component in a list of Ouroboros setup mutations.
+    ("Codex skill health", "Claude Code skill health"),
+    (
+        "Ouroboros package, Codex, and runtime components",
+        "Ouroboros package, host integration, and runtime components",
+    ),
     # Lora installs per host, so the catalog's scope wording and `--agent` value
     # both move. These phrases are long enough not to collide with the
     # instruction-file text handled by overrides.
     ("Configure it for Codex user-global scope.", "Configure it for the Claude Code user-global scope."),
     ("--agent codex", "--agent claude-code"),
     ("the Codex user-global skill directory", "the Claude Code user-global skill directory"),
-    ("Codex skill roots", "agent skill roots"),
+    # Singular form covers the plural; upstream v0.1.9 introduced "another
+    # Codex skill root" alongside the existing "Codex skill roots".
+    ("Codex skill root", "agent skill root"),
     ("a new Codex user-scoped", "a new user-scoped"),
     (
         "restart Codex so a new session loads the skill snapshot",
@@ -146,6 +165,15 @@ FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("${PLUGIN_ROOT}", "Claude Code expands ${CLAUDE_PLUGIN_ROOT}; add a data substitution"),
     ("Codex", "add a substitution rule, an override, or a reviewed exemption"),
 )
+
+# Every lowercase `$name` in upstream Markdown is a Codex skill invocation.
+# `FORBIDDEN` names one needle per sigil family that already exists, so a family
+# upstream introduces later passes both the substitution table and the forbidden
+# scan and ships Codex invocation syntax to a Claude Code user in silence. That
+# is how `$interview`, `$pm`, `$seed`, `$qa`, and `$deslop` arrived in v0.1.9.
+# Uppercase spellings are environment variables the generated tree still needs
+# (`${CLAUDE_PLUGIN_ROOT}`, `$CODEX_HOME`) and deliberately do not match.
+SIGIL = re.compile(r"\$[a-z][a-z0-9:_-]*")
 
 
 class SyncError(RuntimeError):
@@ -460,6 +488,28 @@ def check_forbidden(destination: Path, codex_exemptions: set[str]) -> None:
         raise SyncError("host-specific text survived transformation:\n" + "\n".join(failures))
 
 
+def check_sigils(destination: Path) -> None:
+    """Fail on any Codex skill sigil that no substitution rule rewrote.
+
+    This closes the class rather than the known instances: an unmapped sigil is
+    a silent failure, because it is valid Markdown that simply names a command
+    the reader's host does not have.
+    """
+    failures: list[str] = []
+    for path in sorted(destination.rglob("*.md")):
+        if not path.is_file():
+            continue
+        found = sorted(set(SIGIL.findall(path.read_text(encoding="utf-8"))))
+        if found:
+            failures.append(f"  {path.relative_to(destination)}: {', '.join(found)}")
+    if failures:
+        raise SyncError(
+            "Codex skill sigils survived transformation:\n"
+            + "\n".join(failures)
+            + "\nadd a substitution rule naming each sigil's Claude form"
+        )
+
+
 def write_sync_manifest(
     destination: Path, repository: str, commit: str, overrides: list[str]
 ) -> None:
@@ -493,6 +543,7 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     transform_skills(destination)
     write_plugin_manifest(destination)
     check_forbidden(destination, codex_exemptions)
+    check_sigils(destination)
     check_required(destination)
     write_sync_manifest(destination, upstream_manifest()["repository"], commit, overrides)
     return commit, overrides
