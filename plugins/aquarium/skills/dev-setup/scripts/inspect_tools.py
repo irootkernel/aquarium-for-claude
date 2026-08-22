@@ -1393,17 +1393,14 @@ def inspect_gaori(repository: Path, timeout_seconds: float) -> dict[str, Any]:
 
 def skill_roots() -> list[Path]:
     candidates: list[Path] = []
-    for variable in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
-        configured = os.environ.get(variable)
-        if configured:
-            candidates.append(Path(configured).expanduser().joinpath("skills"))
-    candidates.extend(
-        [
-            Path.home().joinpath(".claude/skills"),
-            Path.home().joinpath(".codex/skills"),
-            Path.home().joinpath(".agents/skills"),
-        ]
-    )
+    # Only Claude Code skill roots count here. A skill installed in
+    # another host's root is not reachable from this one, and counting it
+    # would report a cross-host copy as a duplicate installation and
+    # degrade a diagnosis that is about this host.
+    configured = os.environ.get("CLAUDE_CONFIG_DIR")
+    if configured:
+        candidates.append(Path(configured).expanduser().joinpath("skills"))
+    candidates.append(Path.home().joinpath(".claude/skills"))
     roots: list[Path] = []
     for candidate in candidates:
         resolved = candidate.resolve()

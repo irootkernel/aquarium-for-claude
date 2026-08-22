@@ -40,7 +40,7 @@ After read-only discovery, use these batches and component boundaries:
 - For Ouroboros, report the CLI, installed host skills, MCP registration, and runtime readiness independently.
 - For Lora and Deslop, report every discovered user-global installation, frontmatter validity, duplicate or symlink state, and upstream freshness independently.
 
-Disclose in the Sanho, Mulgae, Gaori, and Podway selection choices that either affirmative selection automatically contacts the official GitHub Releases metadata endpoint and `raw.githubusercontent.com` to compare the selected tool's latest supported stable skill with its exact `~/.agents/skills` target. This bounded freshness comparison needs no separate approval and authorizes no installation or replacement.
+Disclose in the Sanho, Mulgae, Gaori, and Podway selection choices that either affirmative selection automatically contacts the official GitHub Releases metadata endpoint and `raw.githubusercontent.com` to compare the selected tool's latest supported stable skill with its exact `~/.claude/skills` target. This bounded freshness comparison needs no separate approval and authorizes no installation or replacement.
 
 When Mulgae or Gaori is selected, ask separately whether to configure that tool's project-local MCP; offer `Configure project MCP`, `Diagnose only`, and `Skip` and recommend configuration only for a trusted project.
 
@@ -64,7 +64,7 @@ Within one confirmed `dev-setup-bundle` request, accept the bundle owner's alrea
 
 1. From the official GitHub Releases metadata, resolve the newest non-draft, non-prerelease tag within the tool's supported release line. Fetch only `SKILL.md`, `references/lifecycle.md`, `references/authoring.md`, and `references/recovery.md` for that tag from the catalog's `raw.githubusercontent.com` source into an ephemeral temporary directory.
 2. Before comparing, require all four regular files, compute their SHA-256 digests, and verify the expected `name: use-sanho`, `name: use-mulgae`, `name: use-gaori`, or `name: use-podway` frontmatter. Reject redirects or responses that resolve outside the disclosed official endpoints. Never execute fetched content.
-3. Compare the verified source against exactly `~/.agents/skills/<skill-name>` as complete directory trees. Treat missing expected files, different bytes, invalid frontmatter, symlinks, and any extra local files as differences. Other agent skill roots remain diagnostic evidence only; never update or remove another discovered copy through this automatic comparison.
+3. Compare the verified source against exactly `~/.claude/skills/<skill-name>` as complete directory trees. Treat missing expected files, different bytes, invalid frontmatter, symlinks, and any extra local files as differences. Other agent skill roots remain diagnostic evidence only; never update or remove another discovered copy through this automatic comparison.
 4. If the trees match exactly, report the source tag and `current` status without asking an update question. If the target is absent, show the exact target and ask separately whether to install it. If it differs, show the source tag, the complete file-set diff including additions and deletions, and ask separately whether to replace it after establishing the backup policy. One skill target requires one explicit installation or replacement approval; approval for another tool does not apply.
 5. If metadata lookup, download, validation, or comparison fails, report `freshness_unverifiable` with the failed endpoint or validation stage, make no freshness claim, remove the temporary payload when possible, and continue any safe local diagnosis. Do not propose an installation or replacement from an unverified payload.
 
@@ -182,7 +182,7 @@ Report:
 
 - selected, skipped, and planned tools;
 - resolved versions and sources;
-- each selected paired skill's comparison tag, exact `~/.agents/skills` target, `current`, `missing`, `different`, or `freshness_unverifiable` result, temporary-payload cleanup, and any installation or replacement decision;
+- each selected paired skill's comparison tag, exact `~/.claude/skills` target, `current`, `missing`, `different`, or `freshness_unverifiable` result, temporary-payload cleanup, and any installation or replacement decision;
 - selected backup policy, existing state backed up or deliberately left without a backup, backup verification and restoration paths when applicable, and the disclosed recovery boundary;
 - Sanho CLI, workspace, and `use-sanho` skill state separately;
 - Mulgae CLI and Doctor v2 compatibility, project Config v3, local configuration, provider identity, binary availability, provider CLI compatibility, configured and role-route readiness, `use-mulgae` skill, installation prerequisites, and project MCP state separately;

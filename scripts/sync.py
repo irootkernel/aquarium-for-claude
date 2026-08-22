@@ -87,9 +87,12 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("Configure it for Codex user-global scope.", "Configure it for the Claude Code user-global scope."),
     ("--agent codex", "--agent claude-code"),
     ("the Codex user-global skill directory", "the Claude Code user-global skill directory"),
+    # The shared cross-agent root is not a Claude Code skill root, so a skill
+    # installed only there is never reachable as `/<skill-name>` here.
+    ("~/.agents/skills", "~/.claude/skills"),
     # Singular form covers the plural; upstream v0.1.9 introduced "another
     # Codex skill root" alongside the existing "Codex skill roots".
-    ("Codex skill root", "agent skill root"),
+    ("Codex skill root", "Claude Code skill root"),
     ("a new Codex user-scoped", "a new user-scoped"),
     (
         "restart Codex so a new session loads the skill snapshot",
@@ -106,9 +109,10 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ),
 )
 
-# Substitutions for bundled scripts. Kept separate from Markdown because
-# `CODEX_HOME` is a real environment variable the generated script still reads:
-# a Claude Code user may also have Codex skills installed.
+# Substitutions for bundled scripts, kept separate from Markdown because they
+# rewrite executable behavior rather than prose. Skill discovery narrows to the
+# Claude Code roots: this artifact diagnoses one host, and a copy sitting in
+# another host's root is neither reachable here nor a duplicate of anything.
 SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     (
         '    codex_home = os.environ.get("CODEX_HOME")\n'
@@ -117,17 +121,14 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    candidates.extend(\n"
         '        [Path.home().joinpath(".codex/skills"), Path.home().joinpath(".agents/skills")]\n'
         "    )\n",
-        '    for variable in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):\n'
-        "        configured = os.environ.get(variable)\n"
-        "        if configured:\n"
-        '            candidates.append(Path(configured).expanduser().joinpath("skills"))\n'
-        "    candidates.extend(\n"
-        "        [\n"
-        '            Path.home().joinpath(".claude/skills"),\n'
-        '            Path.home().joinpath(".codex/skills"),\n'
-        '            Path.home().joinpath(".agents/skills"),\n'
-        "        ]\n"
-        "    )\n",
+        "    # Only Claude Code skill roots count here. A skill installed in\n"
+        "    # another host's root is not reachable from this one, and counting it\n"
+        "    # would report a cross-host copy as a duplicate installation and\n"
+        "    # degrade a diagnosis that is about this host.\n"
+        '    configured = os.environ.get("CLAUDE_CONFIG_DIR")\n'
+        "    if configured:\n"
+        '        candidates.append(Path(configured).expanduser().joinpath("skills"))\n'
+        '    candidates.append(Path.home().joinpath(".claude/skills"))\n',
     ),
     # `claude mcp get` reports a definite not-found as `No MCP server named
     # "<name>". Configured servers: ...`, which the Codex `... found.`
@@ -367,6 +368,7 @@ FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("$orca-cli", "add a substitution rule"),
     ("request_user_input", "add a substitution rule or an override"),
     ("--agent codex", "add an override"),
+    ("~/.agents/skills", "Claude Code loads ~/.claude/skills; add a substitution rule"),
     ("${PLUGIN_ROOT}", "Claude Code expands ${CLAUDE_PLUGIN_ROOT}; add a data substitution"),
     ("Codex", "add a substitution rule, an override, or a reviewed exemption"),
 )
