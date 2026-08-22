@@ -1623,10 +1623,33 @@ def inspect_ouroboros(repository: Path, timeout_seconds: float) -> dict[str, Any
         repository,
         timeout_seconds,
     )
-    tool["mcp_runtime"] = {
-        "status": "configured" if mcp_doctor["ok"] else "degraded",
-        "probe": normalized_probe(mcp_doctor),
-    }
+    # `ooo mcp doctor` reports the CLI's own environment. This host deliberately
+    # keeps MCP 1.x there while the plugin launches the MCP 2 server in an
+    # isolated process, so its `mcp_import` check — and the exit code with it —
+    # fails on a correctly configured machine. The remaining checks carry runtime
+    # health here; the server's own health is the registration component.
+    doctor_checks = mcp_doctor.get("result")
+    runtime_probe = normalized_probe(mcp_doctor)
+    if isinstance(doctor_checks, list):
+        failed = sorted(
+            str(check.get("name"))
+            for check in doctor_checks
+            if isinstance(check, dict)
+            and check.get("status") == "fail"
+            and check.get("name") != "mcp_import"
+        )
+        if failed:
+            runtime_probe["reason"] = "doctor_checks_failed"
+        tool["mcp_runtime"] = {
+            "status": "degraded" if failed else "configured",
+            "failed_checks": failed,
+            "probe": runtime_probe,
+        }
+    else:
+        tool["mcp_runtime"] = {
+            "status": "degraded",
+            "probe": runtime_probe,
+        }
 
     components_ready = (
         tool["version_supported"]

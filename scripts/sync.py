@@ -294,6 +294,41 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        and tool[\"codex_integration\"][\"status\"] == \"configured\"\n",
         "        and tool[\"host_integration\"][\"status\"] == \"configured\"\n",
     ),
+    # Upstream reads this component from the doctor's exit code, which cannot
+    # succeed on a host whose MCP 2 server lives outside the CLI environment.
+    (
+        "    tool[\"mcp_runtime\"] = {\n"
+        "        \"status\": \"configured\" if mcp_doctor[\"ok\"] else \"degraded\",\n"
+        "        \"probe\": normalized_probe(mcp_doctor),\n"
+        "    }\n",
+        "    # `ooo mcp doctor` reports the CLI's own environment. This host deliberately\n"
+        "    # keeps MCP 1.x there while the plugin launches the MCP 2 server in an\n"
+        "    # isolated process, so its `mcp_import` check \u2014 and the exit code with it \u2014\n"
+        "    # fails on a correctly configured machine. The remaining checks carry runtime\n"
+        "    # health here; the server's own health is the registration component.\n"
+        "    doctor_checks = mcp_doctor.get(\"result\")\n"
+        "    runtime_probe = normalized_probe(mcp_doctor)\n"
+        "    if isinstance(doctor_checks, list):\n"
+        "        failed = sorted(\n"
+        "            str(check.get(\"name\"))\n"
+        "            for check in doctor_checks\n"
+        "            if isinstance(check, dict)\n"
+        "            and check.get(\"status\") == \"fail\"\n"
+        "            and check.get(\"name\") != \"mcp_import\"\n"
+        "        )\n"
+        "        if failed:\n"
+        "            runtime_probe[\"reason\"] = \"doctor_checks_failed\"\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"degraded\" if failed else \"configured\",\n"
+        "            \"failed_checks\": failed,\n"
+        "            \"probe\": runtime_probe,\n"
+        "        }\n"
+        "    else:\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"degraded\",\n"
+        "            \"probe\": runtime_probe,\n"
+        "        }\n",
+    ),
     # `hooks/task_commit_gate.py` names the remediation skill in the text the
     # user sees when a commit is denied. Markdown rules do not reach `.py`.
     ("$aquarium:", "/aquarium:"),
@@ -318,6 +353,7 @@ REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
     # would stop them matching and silently restore the Codex-only inspection.
     ("skills/dev-setup/scripts/inspect_tools.py", "plugin:ouroboros:ouroboros"),
     ("skills/dev-setup/scripts/inspect_tools.py", '"host_integration"'),
+    ("skills/dev-setup/scripts/inspect_tools.py", "doctor_checks_failed"),
     ("hooks/hooks.json", "${CLAUDE_PLUGIN_ROOT}"),
     ("hooks/task_commit_gate.py", "/aquarium:task-commit"),
 )
