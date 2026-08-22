@@ -146,15 +146,16 @@ Support only Ouroboros `>=0.51.1,<0.52.0`. Read [tool-catalog.md](references/too
 
 Installation requires an already installed `uv`; never install a package manager as a side effect. Resolve one exact `ouroboros-ai` version inside the supported range, disclose the Python package index request and package target, show `uv tool install ouroboros-ai==<exact-version>` or the exact approved upgrade form, and obtain a dedicated approval before running it. Do not install from an unpinned range.
 
-Treat the following as three separate persistent mutations, each with its own displayed command, changed paths, and explicit approval:
+Treat the following as four separate persistent mutations, each with its own displayed command, changed paths, and explicit approval:
 
 1. Exact package installation or upgrade through `uv`.
-2. `ooo setup refresh`, which rewrites the rules, skills, bridges, and instruction guides a previous setup already installed for every detected runtime, without changing MCP registration, the runtime selection, or `~/.ouroboros/config.yaml`.
-3. `ooo setup --runtime claude --non-interactive`, which may update Claude Code integration artifacts and Ouroboros runtime state. Omit `--mcp-mode`, which selects another host's MCP configuration mode.
+2. Installing the Ouroboros Claude Code plugin, which is what provides the `/ouroboros:*` skills and the `plugin:ouroboros:ouroboros` MCP server.
+3. `ooo setup refresh`, which rewrites the rules, skills, bridges, and instruction guides a previous setup already installed for every detected runtime, without changing MCP registration, the runtime selection, or `~/.ouroboros/config.yaml`.
+4. `ooo setup --runtime claude --non-interactive`, which sets the runtime and LLM backend in `~/.ouroboros/config.yaml`. It deliberately registers no MCP server, because that profile cannot share the isolated server process the plugin launches; omit `--mcp-mode`, which selects another host's MCP configuration mode.
 
 Approval for one never authorizes another. Re-read targets immediately before each mutation and invalidate stale approval. Setup must not call an Ouroboros provider, authenticate, run `auto`, `run`, `ralph`, or `evolve`, transmit repository source, create a Seed, or start an Aquarium design workflow.
 
-After approved mutations, verify `ooo --version`, `ooo mcp doctor --json`, and `claude mcp get ouroboros`. `ooo codex doctor` covers another host's artifacts and has no Claude Code counterpart, so establish installed-skill health from the inspection result rather than from a doctor command. When the active host can expose MCP tools safely, verify live exposure separately without invoking a provider. Report missing skills, rules, registration, runtime health, and live exposure as distinct gaps, and tell the user when a Claude Code restart is required.
+After approved mutations, verify `ooo --version`, `ooo mcp doctor --json`, and `claude mcp get plugin:ouroboros:ouroboros`. A resolving plugin-scoped name proves the plugin is installed and enabled and its skills are reachable; `Status: ✔ Connected` additionally proves the server is usable, and a resolved but unconnected server is a degraded registration rather than a missing one. When the active host can expose MCP tools safely, verify live exposure separately without invoking a provider. Report missing plugin, registration, runtime health, and live exposure as distinct gaps, and tell the user when a Claude Code restart is required.
 
 ## Gate the Instruction File With Two Approvals
 

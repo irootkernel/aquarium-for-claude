@@ -129,6 +129,171 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        ]\n"
         "    )\n",
     ),
+    # `claude mcp get` reports a definite not-found as `No MCP server named
+    # "<name>". Configured servers: ...`, which the Codex `... found.`
+    # full-match rejects, degrading the missing case instead of naming it.
+    (
+        "        not_found = re.fullmatch(\n"
+        "            r\"(?:Error:\\s*)?No MCP server named ['\\\"]?ouroboros['\\\"]? found\\.?\",\n"
+        "            stderr,\n"
+        "        )\n",
+        "        not_found = re.match(\n"
+        "            r\"No MCP server named ['\\\"]?[^'\\\"]+['\\\"]?\\.\",\n"
+        "            stderr,\n"
+        "        )\n",
+    ),
+    # The Codex probe returns typed JSON; the Claude one returns a rendered
+    # block, so the enabled/disabled decision moves to its `Status:` line.
+    (
+        "    parsed = parse_json_probe(raw_probe)\n"
+        "    if parsed.get(\"error_code\") == \"invalid_json\":\n"
+        "        probe[\"error_code\"] = \"invalid_json\"\n"
+        "        probe[\"reason\"] = \"registration_invalid_json\"\n"
+        "        return {\"status\": \"degraded\", \"probe\": probe}\n"
+        "    result = parsed.get(\"result\")\n"
+        "    if not isinstance(result, dict):\n"
+        "        probe[\"reason\"] = \"registration_result_invalid\"\n"
+        "        return {\"status\": \"degraded\", \"probe\": probe}\n"
+        "    if result.get(\"enabled\") is True:\n"
+        "        return {\"status\": \"configured\", \"probe\": probe}\n"
+        "    if result.get(\"enabled\") is False:\n"
+        "        probe[\"reason\"] = \"registration_disabled\"\n"
+        "    elif \"enabled\" not in result:\n"
+        "        probe[\"reason\"] = \"registration_enabled_missing\"\n"
+        "    else:\n"
+        "        probe[\"reason\"] = \"registration_enabled_invalid\"\n"
+        "    return {\"status\": \"degraded\", \"probe\": probe}\n"
+        "\n",
+        "    # `claude mcp get` prints a human-readable block rather than typed JSON, so\n"
+        "    # the registration is read from its `Status:` line. A server that resolves\n"
+        "    # but cannot connect is registered and unhealthy, not unregistered.\n"
+        "    status_line = \"\"\n"
+        "    for line in raw_probe.get(\"stdout\", \"\").splitlines():\n"
+        "        stripped = line.strip()\n"
+        "        if stripped.startswith(\"Status:\"):\n"
+        "            status_line = stripped\n"
+        "            break\n"
+        "    if not status_line:\n"
+        "        probe[\"reason\"] = \"registration_status_missing\"\n"
+        "        return {\"status\": \"degraded\", \"probe\": probe}\n"
+        "    if \"Connected\" in status_line:\n"
+        "        return {\"status\": \"configured\", \"probe\": probe}\n"
+        "    probe[\"reason\"] = \"registration_not_connected\"\n"
+        "    return {\"status\": \"degraded\", \"probe\": probe}\n",
+    ),
+    # Upstream probes Codex for the Ouroboros MCP registration, so on Claude
+    # Code the component could never report `configured` and every design
+    # skill stayed blocked. Ouroboros registers its Claude MCP server through
+    # its own plugin, which is what this probes instead.
+    (
+        "    codex = shutil.which(\"codex\")\n"
+        "    if codex:\n"
+        "        registration_raw = run_command(\n"
+        "            [\n"
+        "                str(Path(codex).resolve()),\n"
+        "                \"mcp\",\n"
+        "                \"get\",\n"
+        "                \"ouroboros\",\n"
+        "                \"--json\",\n"
+        "            ],\n"
+        "            repository,\n"
+        "            timeout_seconds,\n"
+        "        )\n"
+        "        tool[\"mcp_registration\"] = classify_ouroboros_registration(\n"
+        "            registration_raw\n"
+        "        )\n"
+        "    else:\n"
+        "        tool[\"mcp_registration\"] = {\n"
+        "            \"status\": \"unverifiable\",\n"
+        "            \"probe\": skipped_probe(\"codex_executable_missing\"),\n"
+        "        }\n",
+        "    claude = shutil.which(\"claude\")\n"
+        "    if claude:\n"
+        "        # Ouroboros ships its Claude Code integration as a plugin, so the MCP\n"
+        "        # server it registers is plugin-scoped. Whether that name resolves at all\n"
+        "        # is the integration signal, because it proves the plugin is installed\n"
+        "        # and enabled and therefore that the `/ouroboros:*` skills the design\n"
+        "        # workflows call are present. Those skills do not need the server, so a\n"
+        "        # resolved-but-unhealthy entry degrades the registration, not the\n"
+        "        # integration. A bare `ouroboros` entry proves only that some MCP server\n"
+        "        # was registered by hand, which leaves the skills unaccounted for.\n"
+        "        claude_executable = str(Path(claude).resolve())\n"
+        "        plugin_scoped = classify_ouroboros_registration(\n"
+        "            run_command(\n"
+        "                [claude_executable, \"mcp\", \"get\", \"plugin:ouroboros:ouroboros\"],\n"
+        "                repository,\n"
+        "                timeout_seconds,\n"
+        "            )\n"
+        "        )\n"
+        "        if plugin_scoped[\"status\"] == \"missing\":\n"
+        "            direct = classify_ouroboros_registration(\n"
+        "                run_command(\n"
+        "                    [claude_executable, \"mcp\", \"get\", \"ouroboros\"],\n"
+        "                    repository,\n"
+        "                    timeout_seconds,\n"
+        "                )\n"
+        "            )\n"
+        "            tool[\"mcp_registration\"] = direct\n"
+        "            host_integration = {\n"
+        "                \"status\": \"unverifiable\"\n"
+        "                if direct[\"status\"] == \"configured\"\n"
+        "                else \"missing\",\n"
+        "                \"probe\": plugin_scoped[\"probe\"],\n"
+        "            }\n"
+        "        else:\n"
+        "            tool[\"mcp_registration\"] = plugin_scoped\n"
+        "            host_integration = {\n"
+        "                \"status\": \"configured\",\n"
+        "                \"probe\": {\n"
+        "                    key: value\n"
+        "                    for key, value in plugin_scoped[\"probe\"].items()\n"
+        "                    if key != \"reason\"\n"
+        "                },\n"
+        "            }\n"
+        "    else:\n"
+        "        tool[\"mcp_registration\"] = {\n"
+        "            \"status\": \"unverifiable\",\n"
+        "            \"probe\": skipped_probe(\"claude_executable_missing\"),\n"
+        "        }\n"
+        "        host_integration = {\n"
+        "            \"status\": \"unverifiable\",\n"
+        "            \"probe\": skipped_probe(\"claude_executable_missing\"),\n"
+        "        }\n",
+    ),
+    # `ooo codex doctor` has no Claude Code counterpart, so the integration
+    # component is taken from the plugin-scoped registration above.
+    (
+        "    codex_doctor = run_command(\n"
+        "        [tool[\"executable\"], \"codex\", \"doctor\"], repository, timeout_seconds\n"
+        "    )\n"
+        "    tool[\"codex_integration\"] = {\n"
+        "        \"status\": \"configured\" if codex_doctor[\"ok\"] else \"degraded\",\n"
+        "        \"probe\": {\n"
+        "            key: codex_doctor[key]\n"
+        "            for key in (\"attempted\", \"ok\", \"exit_code\", \"timed_out\")\n"
+        "        },\n"
+        "    }\n",
+        "    # `ooo codex doctor` verifies another host's routing artifacts and has no\n"
+        "    # Claude Code counterpart. The plugin-scoped registration resolved above is\n"
+        "    # the host-integration signal here, so it is recorded rather than reprobed.\n"
+        "    tool[\"host_integration\"] = host_integration\n",
+    ),
+    # The reported component is the host's own integration here, not Codex's.
+    (
+        "        tool[\"codex_integration\"] = {\n"
+        "            \"status\": \"missing\",\n"
+        "            \"probe\": skipped_probe(\"executable_missing\"),\n"
+        "        }\n",
+        "        tool[\"host_integration\"] = {\n"
+        "            \"status\": \"missing\",\n"
+        "            \"probe\": skipped_probe(\"executable_missing\"),\n"
+        "        }\n",
+    ),
+    # ...and the readiness rollup reads the renamed component.
+    (
+        "        and tool[\"codex_integration\"][\"status\"] == \"configured\"\n",
+        "        and tool[\"host_integration\"][\"status\"] == \"configured\"\n",
+    ),
     # `hooks/task_commit_gate.py` names the remediation skill in the text the
     # user sees when a commit is denied. Markdown rules do not reach `.py`.
     ("$aquarium:", "/aquarium:"),
@@ -149,6 +314,10 @@ DATA_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
 REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
     ("skills/dev-setup/scripts/inspect_tools.py", "CLAUDE_CONFIG_DIR"),
     ("skills/dev-setup/scripts/inspect_tools.py", '".claude/skills"'),
+    # The Ouroboros probes are a multi-line block match, so a reformat upstream
+    # would stop them matching and silently restore the Codex-only inspection.
+    ("skills/dev-setup/scripts/inspect_tools.py", "plugin:ouroboros:ouroboros"),
+    ("skills/dev-setup/scripts/inspect_tools.py", '"host_integration"'),
     ("hooks/hooks.json", "${CLAUDE_PLUGIN_ROOT}"),
     ("hooks/task_commit_gate.py", "/aquarium:task-commit"),
 )

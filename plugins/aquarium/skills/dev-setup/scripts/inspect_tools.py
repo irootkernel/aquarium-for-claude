@@ -388,8 +388,8 @@ def classify_ouroboros_registration(
 
     stderr = raw_probe.get("stderr", "").strip()
     if not raw_probe["ok"]:
-        not_found = re.fullmatch(
-            r"(?:Error:\s*)?No MCP server named ['\"]?ouroboros['\"]? found\.?",
+        not_found = re.match(
+            r"No MCP server named ['\"]?[^'\"]+['\"]?\.",
             stderr,
         )
         probe["reason"] = (
@@ -400,25 +400,22 @@ def classify_ouroboros_registration(
             "probe": probe,
         }
 
-    parsed = parse_json_probe(raw_probe)
-    if parsed.get("error_code") == "invalid_json":
-        probe["error_code"] = "invalid_json"
-        probe["reason"] = "registration_invalid_json"
+    # `claude mcp get` prints a human-readable block rather than typed JSON, so
+    # the registration is read from its `Status:` line. A server that resolves
+    # but cannot connect is registered and unhealthy, not unregistered.
+    status_line = ""
+    for line in raw_probe.get("stdout", "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("Status:"):
+            status_line = stripped
+            break
+    if not status_line:
+        probe["reason"] = "registration_status_missing"
         return {"status": "degraded", "probe": probe}
-    result = parsed.get("result")
-    if not isinstance(result, dict):
-        probe["reason"] = "registration_result_invalid"
-        return {"status": "degraded", "probe": probe}
-    if result.get("enabled") is True:
+    if "Connected" in status_line:
         return {"status": "configured", "probe": probe}
-    if result.get("enabled") is False:
-        probe["reason"] = "registration_disabled"
-    elif "enabled" not in result:
-        probe["reason"] = "registration_enabled_missing"
-    else:
-        probe["reason"] = "registration_enabled_invalid"
+    probe["reason"] = "registration_not_connected"
     return {"status": "degraded", "probe": probe}
-
 
 def selected_fields(value: Any, names: tuple[str, ...]) -> dict[str, Any]:
     if not isinstance(value, dict):
@@ -1536,32 +1533,63 @@ def inspect_deslop() -> dict[str, Any]:
 def inspect_ouroboros(repository: Path, timeout_seconds: float) -> dict[str, Any]:
     tool = base_tool("ooo")
     tool["supported_range"] = ">=0.51.1,<0.52.0"
-    codex = shutil.which("codex")
-    if codex:
-        registration_raw = run_command(
-            [
-                str(Path(codex).resolve()),
-                "mcp",
-                "get",
-                "ouroboros",
-                "--json",
-            ],
-            repository,
-            timeout_seconds,
+    claude = shutil.which("claude")
+    if claude:
+        # Ouroboros ships its Claude Code integration as a plugin, so the MCP
+        # server it registers is plugin-scoped. Whether that name resolves at all
+        # is the integration signal, because it proves the plugin is installed
+        # and enabled and therefore that the `/ouroboros:*` skills the design
+        # workflows call are present. Those skills do not need the server, so a
+        # resolved-but-unhealthy entry degrades the registration, not the
+        # integration. A bare `ouroboros` entry proves only that some MCP server
+        # was registered by hand, which leaves the skills unaccounted for.
+        claude_executable = str(Path(claude).resolve())
+        plugin_scoped = classify_ouroboros_registration(
+            run_command(
+                [claude_executable, "mcp", "get", "plugin:ouroboros:ouroboros"],
+                repository,
+                timeout_seconds,
+            )
         )
-        tool["mcp_registration"] = classify_ouroboros_registration(
-            registration_raw
-        )
+        if plugin_scoped["status"] == "missing":
+            direct = classify_ouroboros_registration(
+                run_command(
+                    [claude_executable, "mcp", "get", "ouroboros"],
+                    repository,
+                    timeout_seconds,
+                )
+            )
+            tool["mcp_registration"] = direct
+            host_integration = {
+                "status": "unverifiable"
+                if direct["status"] == "configured"
+                else "missing",
+                "probe": plugin_scoped["probe"],
+            }
+        else:
+            tool["mcp_registration"] = plugin_scoped
+            host_integration = {
+                "status": "configured",
+                "probe": {
+                    key: value
+                    for key, value in plugin_scoped["probe"].items()
+                    if key != "reason"
+                },
+            }
     else:
         tool["mcp_registration"] = {
             "status": "unverifiable",
-            "probe": skipped_probe("codex_executable_missing"),
+            "probe": skipped_probe("claude_executable_missing"),
+        }
+        host_integration = {
+            "status": "unverifiable",
+            "probe": skipped_probe("claude_executable_missing"),
         }
 
     if not tool["installed"]:
         tool["version_supported"] = False
         tool["probes"]["version"] = skipped_probe("executable_missing")
-        tool["codex_integration"] = {
+        tool["host_integration"] = {
             "status": "missing",
             "probe": skipped_probe("executable_missing"),
         }
@@ -1585,16 +1613,10 @@ def inspect_ouroboros(repository: Path, timeout_seconds: float) -> dict[str, Any
         for key in ("attempted", "ok", "exit_code", "timed_out")
     }
 
-    codex_doctor = run_command(
-        [tool["executable"], "codex", "doctor"], repository, timeout_seconds
-    )
-    tool["codex_integration"] = {
-        "status": "configured" if codex_doctor["ok"] else "degraded",
-        "probe": {
-            key: codex_doctor[key]
-            for key in ("attempted", "ok", "exit_code", "timed_out")
-        },
-    }
+    # `ooo codex doctor` verifies another host's routing artifacts and has no
+    # Claude Code counterpart. The plugin-scoped registration resolved above is
+    # the host-integration signal here, so it is recorded rather than reprobed.
+    tool["host_integration"] = host_integration
 
     mcp_doctor = json_probe(
         [tool["executable"], "mcp", "doctor", "--json"],
@@ -1608,7 +1630,7 @@ def inspect_ouroboros(repository: Path, timeout_seconds: float) -> dict[str, Any
 
     components_ready = (
         tool["version_supported"]
-        and tool["codex_integration"]["status"] == "configured"
+        and tool["host_integration"]["status"] == "configured"
         and tool["mcp_runtime"]["status"] == "configured"
         and tool["mcp_registration"]["status"] == "configured"
     )
