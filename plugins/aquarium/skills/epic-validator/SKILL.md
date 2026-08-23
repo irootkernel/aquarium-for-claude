@@ -1,6 +1,7 @@
 ---
 name: epic-validator
 description: "Cold-validate one completed roadmap epic through a bounded direct audit, one remediation and confirmation review, severity-based user direction, and isolated commits. Use when the user explicitly invokes /aquarium:epic-validator with one repository, canonical roadmap path, and exactly one epic ID after its member tasks were completed through /aquarium:task-handler, /aquarium:epic-handler, or another evidence-backed workflow; do not invoke it implicitly."
+argument-hint: "<roadmap-path> <epic-id>"
 disable-model-invocation: true
 ---
 

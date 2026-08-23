@@ -53,6 +53,29 @@ ADDED_PATHS: tuple[str, ...] = (
     "agents/independent-reviewer.md",
 )
 
+# Slash-menu hints for the skills that take arguments. Claude Code shows the
+# hint after the command name in the `/` menu; the Codex sidecar has no
+# counterpart, so the table lives here. It is keyed by skill so a skill that
+# disappears upstream stops the sync instead of leaving a stale hint, and it
+# uses the argument vocabulary of each skill's description, which is the
+# user-facing contract. Skills that take free text carry no hint.
+ARGUMENT_HINTS: dict[str, str] = {
+    "epic-handler": "<roadmap-path> <epic-id>",
+    "epic-validator": "<roadmap-path> <epic-id>",
+    "task-handler": "<roadmap-path> <task-id>",
+    "task-plan": "<roadmap-path> <task-id>",
+    "task-implement": "<roadmap-path> <task-id>",
+    "task-verify": "<roadmap-path> <task-id>",
+    "task-refine": "<roadmap-path> <task-id>",
+    "task-document": "<roadmap-path> <task-id>",
+    "task-review": "<roadmap-path> <task-id>",
+    "task-close": "<roadmap-path> <task-id>",
+    "release-qa": "[version]",
+    "dev-setup-bundle": "<manifest-path>",
+    "independent-review": "<epic-or-task-id>",
+    "orca-review": "<target> [task-or-epic-id]",
+}
+
 # Upstream files deliberately left out of the generated plugin. Each entry pairs
 # the path with the reason it does not belong in a Claude Code artifact. The
 # path must still exist upstream: an exclusion that quietly stops applying is
@@ -1087,26 +1110,33 @@ def read_sidecar_policy(skill: Path) -> bool:
     return match.group(1) == "true"
 
 
-def gate_frontmatter(text: str, skill_name: str, allow_implicit: bool) -> str:
-    """Insert `disable-model-invocation: true` when implicit invocation is off.
+def decorate_frontmatter(
+    text: str, skill_name: str, allow_implicit: bool, argument_hint: str | None
+) -> str:
+    """Add the Claude Code frontmatter keys the Codex sidecar cannot carry.
 
-    Claude Code has no analogue of the Codex sidecar, so the policy has to move
-    into the frontmatter. Codex's own plugin validator rejects this key, which
-    is precisely why the generated tree is a separate artifact.
+    `disable-model-invocation: true` is inserted when implicit invocation is
+    off: Claude Code has no analogue of the Codex sidecar, so the policy has to
+    move into the frontmatter, and Codex's own plugin validator rejects the key,
+    which is precisely why the generated tree is a separate artifact.
+    `argument-hint` is inserted for the skills in `ARGUMENT_HINTS`.
     """
     match = re.match(r"\A---\n(.*?)\n---\n", text, re.DOTALL)
     if not match:
         raise SyncError(f"skill `{skill_name}` has no frontmatter block")
-    if allow_implicit:
-        return text
     body = match.group(1)
-    if "disable-model-invocation" in body:
-        raise SyncError(f"skill `{skill_name}` already declares disable-model-invocation")
-    return text.replace(
-        match.group(0),
-        f"---\n{body}\ndisable-model-invocation: true\n---\n",
-        1,
-    )
+    for key in ("disable-model-invocation", "argument-hint"):
+        if key in body:
+            raise SyncError(f"skill `{skill_name}` already declares {key}")
+    lines = [body]
+    if argument_hint is not None:
+        # Quoted: a hint such as `[version]` would otherwise parse as a YAML list.
+        lines.append(f"argument-hint: {json.dumps(argument_hint)}")
+    if not allow_implicit:
+        lines.append("disable-model-invocation: true")
+    if len(lines) == 1:
+        return text
+    return text.replace(match.group(0), "---\n" + "\n".join(lines) + "\n---\n", 1)
 
 
 def copy_tree(destination: Path) -> None:
@@ -1126,13 +1156,25 @@ def remove_excluded(destination: Path) -> list[str]:
 
 def transform_skills(destination: Path) -> None:
     skills = destination / "skills"
-    for skill in sorted(p for p in skills.iterdir() if p.is_dir()):
-        allow_implicit = read_sidecar_policy(UPSTREAM_PLUGIN / "skills" / skill.name)
+    names = sorted(p.name for p in skills.iterdir() if p.is_dir())
+    unknown = sorted(set(ARGUMENT_HINTS) - set(names))
+    if unknown:
+        raise SyncError(
+            "ARGUMENT_HINTS names skills upstream no longer ships: " + ", ".join(unknown)
+        )
+    for name in names:
+        skill = skills / name
+        allow_implicit = read_sidecar_policy(UPSTREAM_PLUGIN / "skills" / name)
         skill_md = skill / "SKILL.md"
         if not skill_md.is_file():
-            raise SyncError(f"skill `{skill.name}` has no SKILL.md")
+            raise SyncError(f"skill `{name}` has no SKILL.md")
         skill_md.write_text(
-            gate_frontmatter(skill_md.read_text(encoding="utf-8"), skill.name, allow_implicit),
+            decorate_frontmatter(
+                skill_md.read_text(encoding="utf-8"),
+                name,
+                allow_implicit,
+                ARGUMENT_HINTS.get(name),
+            ),
             encoding="utf-8",
         )
         # The Codex sidecar has no meaning for Claude Code and its `$` prompts
@@ -1510,6 +1552,7 @@ def write_sync_manifest(
         "overrides": overrides,
         "excluded": excluded,
         "additions": additions,
+        "argument_hints": dict(sorted(ARGUMENT_HINTS.items())),
         "files": files,
     }
     (destination / SYNC_MANIFEST).write_text(

@@ -1,6 +1,7 @@
 ---
 name: task-plan
 description: "Plan one named roadmap task without mutation. Use when /aquarium:task-handler delegates its planning phase or when the user explicitly invokes /aquarium:task-plan to resume that phase with a repository, roadmap path, and exactly one task ID."
+argument-hint: "<roadmap-path> <task-id>"
 disable-model-invocation: true
 ---
 

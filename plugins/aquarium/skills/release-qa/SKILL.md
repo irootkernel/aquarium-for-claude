@@ -1,6 +1,7 @@
 ---
 name: release-qa
 description: "Run one full scenario-based QA pass for an exact main release candidate, or one bounded confirmation pass after that full pass produces remediated findings. Use when the user explicitly invokes /aquarium:release-qa with an intended release version or asks it to propose and confirm one."
+argument-hint: "[version]"
 disable-model-invocation: true
 ---
 

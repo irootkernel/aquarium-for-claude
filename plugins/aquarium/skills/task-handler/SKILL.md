@@ -1,6 +1,7 @@
 ---
 name: task-handler
 description: "Strengthen or resume the procedure around exactly one named roadmap task goal through planning, implementation, verification, refinement, documentation, Mulgae review, and user-approved closeout, including an explicitly requested plan handoff. Use when the user explicitly invokes /aquarium:task-handler with a repository, canonical roadmap path, and exactly one task ID; require explicit invocation and one canonical roadmap task identity."
+argument-hint: "<roadmap-path> <task-id>"
 disable-model-invocation: true
 ---
 

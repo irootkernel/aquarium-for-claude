@@ -48,7 +48,8 @@ assert(
 
 # --- invocation gating mirrors the upstream sidecar ------------------------
 
-ALLOWED_FRONTMATTER_KEYS = %w[description disable-model-invocation name].freeze
+ALLOWED_FRONTMATTER_KEYS = %w[argument-hint description disable-model-invocation name].freeze
+ARGUMENT_HINTS = sync_manifest.fetch("argument_hints")
 
 skill_paths.each do |path|
   name = path.dirname.basename.to_s
@@ -73,6 +74,13 @@ skill_paths.each do |path|
     metadata.fetch("disable-model-invocation", false) == !implicit,
     "disable-model-invocation must mirror the upstream sidecar: #{name} " \
     "(sidecar allow_implicit_invocation=#{implicit})"
+  )
+  # The slash-menu hint is generated from one table, recorded in the sync
+  # manifest; a skill carries a hint exactly when the table names it.
+  assert(
+    metadata["argument-hint"] == ARGUMENT_HINTS[name],
+    "argument-hint must match the recorded table for #{name}: " \
+    "#{metadata['argument-hint'].inspect} vs #{ARGUMENT_HINTS[name].inspect}"
   )
 end
 

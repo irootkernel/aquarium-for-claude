@@ -1,6 +1,7 @@
 ---
 name: task-review
 description: "Run and resolve Mulgae review for one complete roadmap task diff. Use when /aquarium:task-handler delegates review or when the user explicitly invokes /aquarium:task-review with exact task identity, current verification evidence, and a safely isolatable review target."
+argument-hint: "<roadmap-path> <task-id>"
 disable-model-invocation: true
 ---
 

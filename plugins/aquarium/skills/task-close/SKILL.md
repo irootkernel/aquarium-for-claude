@@ -1,6 +1,7 @@
 ---
 name: task-close
 description: "Confirm and close one reviewed roadmap task, including an explicitly selected terminal status and optional commit handoff. Use when /aquarium:task-handler delegates closeout or when the user explicitly invokes /aquarium:task-close with exact task identity, complete review evidence, and a final task diff."
+argument-hint: "<roadmap-path> <task-id>"
 disable-model-invocation: true
 ---
 

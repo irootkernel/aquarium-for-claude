@@ -1,6 +1,7 @@
 ---
 name: epic-handler
 description: "Deliver or resume one named roadmap epic through sequential goal-centered task execution, evidence-gated commits, repeated epic-wide remediation, and an explicitly requested plan handoff. Use when the user explicitly invokes /aquarium:epic-handler with a repository, canonical roadmap path, and exactly one epic ID and wants epic-level goal orchestration without the procedure-strengthening /aquarium:task-handler workflow; do not invoke it implicitly."
+argument-hint: "<roadmap-path> <epic-id>"
 disable-model-invocation: true
 ---
 

@@ -66,6 +66,8 @@ The plugin ships one subagent, `aquarium:independent-reviewer`, from `additions/
 
 Every skill except `task-commit` carries `disable-model-invocation: true`, so Claude cannot start it on its own; you invoke it with `/aquarium:<skill>`. Several of these skills stage, commit, or mutate roadmap state, and the upstream workflow requires explicit invocation. The flag is derived from each upstream skill's `agents/openai.yaml` at sync time, so it can never disagree with the Codex policy.
 
+The skills that take arguments also carry an `argument-hint`, which Claude Code shows after the command name in the `/` menu — `/aquarium:epic-handler <roadmap-path> <epic-id>`, for example. The Codex sidecar has no counterpart, so the hints come from one table in `scripts/sync.py`, recorded in the sync manifest and asserted against every skill's frontmatter; a skill that upstream drops stops the sync rather than leaving a stale hint.
+
 This is also why the plugin is a separate artifact rather than a second manifest in the upstream repository: Codex's plugin validator rejects `disable-model-invocation` outright, while Claude Code needs it for the same guarantee.
 
 ## How generation works

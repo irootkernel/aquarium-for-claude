@@ -1,6 +1,7 @@
 ---
 name: orca-review
 description: "Run one supervised, read-only review of an exact repository snapshot through a user-selected installed AI CLI in Orca, using a bounded multi-agent hierarchy and locally adjudicating the result. Use when the user explicitly invokes /aquarium:orca-review and asks to review staged changes, working-tree changes, a commit or range, or one named task or epic."
+argument-hint: "<target> [task-or-epic-id]"
 disable-model-invocation: true
 ---
 

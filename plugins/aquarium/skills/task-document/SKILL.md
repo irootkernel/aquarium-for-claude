@@ -1,6 +1,7 @@
 ---
 name: task-document
 description: "Update durable documentation and review status for one refined roadmap task. Use when /aquarium:task-handler delegates documentation or when the user explicitly invokes /aquarium:task-document to resume that phase with exact task identity and final behavior."
+argument-hint: "<roadmap-path> <task-id>"
 disable-model-invocation: true
 ---
 

@@ -1,6 +1,7 @@
 ---
 name: task-refine
 description: "Deslop and optimize the verified diff for one roadmap task. Use when /aquarium:task-handler delegates refinement or when the user explicitly invokes /aquarium:task-refine with exact task identity, current verification evidence, and explicit staging authority."
+argument-hint: "<roadmap-path> <task-id>"
 disable-model-invocation: true
 ---
 

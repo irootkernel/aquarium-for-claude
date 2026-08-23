@@ -1,6 +1,7 @@
 ---
 name: task-verify
 description: "Strengthen and verify evidence for one implemented roadmap task. Use when /aquarium:task-handler delegates verification or when the user explicitly invokes /aquarium:task-verify to resume that phase with an implemented task diff and exact task identity."
+argument-hint: "<roadmap-path> <task-id>"
 disable-model-invocation: true
 ---
 
