@@ -108,7 +108,7 @@ Upstream removed `assets/logo-*.png` and the manifest's `composerIcon` and `logo
 
 The `Codex` name is otherwise forbidden in generated text. Two files are exempt: `tool-catalog.md` names the Codex CLI as a Mulgae provider and a required CLI version, and `orca-review/references/provider-contracts.md` names it as one of the selectable third-party review providers alongside Claude, Cursor, and Kimi, both of which stay true here. Each exemption records the upstream digest it was judged against, so the sync stops when that file changes.
 
-One component is still diagnosed against the wrong host. The bundled inspector's Mulgae and Gaori MCP probes read `codex mcp get --json` and `.codex/config.toml`, which v0.1.10 expanded into a three-view global, local, and effective classification. On a machine without Codex they report `unavailable`; with Codex installed they report another host's registration state. The catalog guidance above is authoritative for this host, and re-targeting the inspector is tracked as separate work.
+The Mulgae and Gaori MCP probes are re-targeted for the same reason. Upstream reads them through `codex mcp get --json`, with `CODEX_HOME` pointed at `.codex/` for the local view, so on this host the inspector could never see the registration its own catalog tells the user to create, and `--require-mulgae-mcp` reported the tool degraded forever. The generated inspector reads Claude Code's three views from configuration alone — the user-scope entry and the private per-project entry from `.claude.json`, honouring `CLAUDE_CONFIG_DIR`, and the shared entry from `.mcp.json` with its approval state — and derives the effective view from the documented precedence. It deliberately never calls `claude mcp get`, because that health-checks an approved server and so starts it, and setup must not start the server. A `.mcp.json` server that nobody has approved yet is `unverifiable` with `registration_pending_approval`, not degraded. Two whole functions are replaced so the anchors are the most stable text upstream has, and `tests/test_claude_mcp_inspection.py` exercises the shipped bytes against configuration fixtures under a private `CLAUDE_CONFIG_DIR`.
 
 ## Upgrade
 
@@ -128,11 +128,12 @@ Each override records the SHA-256 of the upstream file it came from. When upstre
 ```bash
 python3 scripts/sync.py --check
 ruby tests/validate.rb
+python3 -m unittest tests/test_claude_mcp_inspection.py
 git diff --check
 claude plugin validate --strict plugins/aquarium
 ```
 
-`--check` regenerates into a temporary directory and fails if the committed output drifted. The Ruby validation covers only what this repository is responsible for — invocation gating against the upstream sidecars, host-neutral generated text, the commit hook's Claude Code contract, byte-identical Podway procedures, manifest agreement, deliberate exclusions, compiled generated scripts, and the marketplace shape. Upstream owns the prose contract and validates it in its own CI. The last command is Claude Code's own plugin validator and runs locally rather than in CI.
+`--check` regenerates into a temporary directory and fails if the committed output drifted. The Ruby validation covers only what this repository is responsible for — invocation gating against the upstream sidecars, host-neutral generated text, the commit hook's Claude Code contract, byte-identical Podway procedures, manifest agreement, deliberate exclusions, compiled generated scripts, and the marketplace shape. The Python test covers the one piece of behaviour this repository authors, the Claude Code MCP inspection. Upstream owns the prose contract and validates it in its own CI. The last command is Claude Code's own plugin validator and runs locally rather than in CI.
 
 ## Documentation style
 
