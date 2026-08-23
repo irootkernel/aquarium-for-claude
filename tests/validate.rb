@@ -290,6 +290,34 @@ assert(!gate.match?(%r{https?://}), "the commit hook must stay local")
 # key as well would shadow the default folder and break the overlap rule above.
 assert(!manifest.key?("hooks"), "plugin manifest must not declare hooks; hooks/hooks.json is automatic")
 
+# --- bundled subagents -------------------------------------------------------
+
+# `agents/` is likewise discovered from the plugin root. The files come from
+# `additions/`, have no upstream counterpart, and are the one place this
+# artifact ships behaviour of its own, so their contract is asserted here.
+assert(!manifest.key?("agents"), "plugin manifest must not declare agents; agents/ is automatic")
+additions = sync_manifest.fetch("additions")
+additions.each do |relative|
+  assert(PLUGIN.join(relative).file?, "recorded addition was not generated: #{relative}")
+  assert(ROOT.join("additions", relative).file?, "recorded addition has no source under additions/: #{relative}")
+end
+
+AGENT_MODELS = %w[inherit opus sonnet haiku].freeze
+EDITING_TOOLS = %w[Edit Write NotebookEdit].freeze
+
+Pathname.glob(PLUGIN.join("agents/*.md")).sort.each do |path|
+  relative = path.relative_path_from(PLUGIN).to_s
+  assert(additions.include?(relative), "agent is not a recorded addition: #{relative}")
+  frontmatter = path.read.match(/\A---\n(.*?)\n---\n/m)
+  assert(frontmatter, "agent lacks frontmatter: #{relative}")
+  agent = YAML.safe_load(frontmatter[1], aliases: false)
+  assert(agent.fetch("name") == path.basename(".md").to_s, "agent name must match its filename: #{relative}")
+  assert(!agent.fetch("description").to_s.strip.empty?, "agent lacks a description: #{relative}")
+  assert(AGENT_MODELS.include?(agent.fetch("model")), "agent model must be one of #{AGENT_MODELS.join(', ')}: #{relative}")
+  tools = agent.fetch("tools").to_s.split(",").map(&:strip)
+  assert(!tools.empty? && (tools & EDITING_TOOLS).empty?, "reviewer agent must carry a tool allowlist without editing tools: #{relative}")
+end
+
 # --- managed Podway procedures ----------------------------------------------
 
 # The integration contract requires the installed copies to be byte-identical to

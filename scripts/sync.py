@@ -30,6 +30,7 @@ OUTPUT = REPOSITORY / "plugins" / "aquarium"
 OVERRIDES = REPOSITORY / "overrides"
 OVERRIDE_MANIFEST = OVERRIDES / "manifest.json"
 CODEX_EXEMPTIONS = OVERRIDES / "codex-exemptions.json"
+ADDITIONS = REPOSITORY / "additions"
 SYNC_MANIFEST = "sync-manifest.json"
 
 COPIED_DIRECTORIES = ("skills", "references", "assets", "hooks")
@@ -40,6 +41,17 @@ DATA_SUFFIXES = (".json",)
 # never rewritten: the Podway procedure IDs are load-bearing identifiers, and the
 # integration contract requires the installed copies to match these bytes.
 SCANNED_SUFFIXES = TEXT_SUFFIXES + SCRIPT_SUFFIXES + DATA_SUFFIXES + (".yaml",)
+
+# Files added to the generated tree that have no upstream counterpart. An
+# explicit allowlist rather than a directory walk, so a stray file cannot ship
+# by accident, and a path that collides with an upstream-derived file is an
+# error: that case is what `overrides/` is for. There is no upstream digest to
+# gate against, so additions pass through every check that scans copied text.
+ADDED_PATHS: tuple[str, ...] = (
+    # A plugin subagent Claude Code discovers from the plugin-root `agents/`
+    # directory: the read-only Opus reviewer `independent-review` dispatches.
+    "agents/independent-reviewer.md",
+)
 
 # Upstream files deliberately left out of the generated plugin. Each entry pairs
 # the path with the reason it does not belong in a Claude Code artifact. The
@@ -1292,6 +1304,30 @@ def apply_overrides(destination: Path) -> list[str]:
     return applied
 
 
+def apply_additions(destination: Path) -> list[str]:
+    """Copy the host-only files that have no upstream counterpart.
+
+    `transform_skills` deletes each skill's own `agents/` sidecar directory; the
+    plugin-root `agents/` directory created here is unrelated to those and is
+    where Claude Code discovers plugin subagents.
+    """
+    added: list[str] = []
+    for relative in ADDED_PATHS:
+        source = ADDITIONS / relative
+        target = destination / relative
+        if not source.is_file():
+            raise SyncError(f"addition file missing: {source}")
+        if target.exists():
+            raise SyncError(
+                f"addition `{relative}` collides with an upstream-derived file; "
+                "use an override for a file upstream ships"
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        added.append(relative)
+    return added
+
+
 def write_plugin_manifest(destination: Path) -> None:
     """Derive the Claude manifest from the Codex one so versions cannot diverge."""
     codex = upstream_manifest()
@@ -1459,6 +1495,7 @@ def write_sync_manifest(
     commit: str,
     overrides: list[str],
     excluded: list[str],
+    additions: list[str],
 ) -> None:
     files = {
         str(path.relative_to(destination)): digest(path)
@@ -1472,6 +1509,7 @@ def write_sync_manifest(
         },
         "overrides": overrides,
         "excluded": excluded,
+        "additions": additions,
         "files": files,
     }
     (destination / SYNC_MANIFEST).write_text(
@@ -1492,13 +1530,16 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     # policy drift the sidecar is meant to prevent.
     overrides = apply_overrides(destination)
     transform_skills(destination)
+    additions = apply_additions(destination)
     write_plugin_manifest(destination)
     check_forbidden(destination, codex_exemptions)
     check_sigils(destination)
     check_generated_python(destination)
     check_excluded_references(destination)
     check_required(destination)
-    write_sync_manifest(destination, upstream_manifest()["repository"], commit, overrides, excluded)
+    write_sync_manifest(
+        destination, upstream_manifest()["repository"], commit, overrides, excluded, additions
+    )
     return commit, overrides
 
 
@@ -1560,7 +1601,10 @@ def main() -> int:
     )
     print(f"generated {len(skills)} skills from upstream {commit[:9]}")
     print(f"  {gated} gated against model invocation, {len(skills) - gated} model-invocable")
-    print(f"  {len(overrides)} overrides applied, {len(EXCLUDED_FILES)} upstream files excluded")
+    print(
+        f"  {len(overrides)} overrides applied, {len(EXCLUDED_FILES)} upstream files excluded, "
+        f"{len(ADDED_PATHS)} host-only files added"
+    )
     return 0
 
 

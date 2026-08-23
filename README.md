@@ -58,6 +58,10 @@ The five design skills drive Ouroboros as a bounded leaf capability and need it 
 
 The plugin ships a `PreToolUse` hook that inspects `Bash` commands and denies a direct `git commit` in a repository whose tracked roadmap carries task lifecycle state, routing it through `task-commit` instead. The hook is local, reads only the proposed command and the working directory, and fails open when it cannot parse its input. Because Claude Code merges an enabled plugin's hooks with your own, review it under `/hooks` after installing.
 
+### Bundled reviewer subagent
+
+The plugin ships one subagent, `aquarium:independent-reviewer`, from `additions/agents/`. It has no upstream counterpart: Codex has no plugin subagents, so upstream's review skill leans on Orca, and the Claude override leaned on prose asking for "a subagent type without editing tools". The bundled agent turns the two requirements that matter into configuration — a tool allowlist of `Read`, `Grep`, `Glob`, and `Bash` with no editing tool, and `model: opus` — and carries a review-focused system prompt derived from the skill's reviewer requirements. Bash stays in the allowlist because a reviewer must read `git diff --cached` and `git show`; its read-only discipline is plan mode plus the prompt, which is stated rather than hidden. The cost is that the agent's description is loaded into every session where the plugin is enabled, which is why it is worded narrowly and negatively; the skill falls back to any editing-free subagent type when the bundled one is absent.
+
 ### Invocation gating
 
 Every skill except `task-commit` carries `disable-model-invocation: true`, so Claude cannot start it on its own; you invoke it with `/aquarium:<skill>`. Several of these skills stage, commit, or mutate roadmap state, and the upstream workflow requires explicit invocation. The flag is derived from each upstream skill's `agents/openai.yaml` at sync time, so it can never disagree with the Codex policy.
@@ -73,19 +77,22 @@ overrides/
   manifest.json                  path → SHA-256 of the upstream file each override was derived from
   codex-exemptions.json          path → SHA-256 of an upstream file whose remaining "Codex" mentions were reviewed
   skills/...                     full-file replacements for host-specific divergence
+additions/
+  agents/...                     host-only files with no upstream counterpart
 scripts/sync.py                  the transformation
 plugins/aquarium/                generated output, committed
+  agents/                        the bundled reviewer subagent
   hooks/                         the roadmap commit guard
   sync-manifest.json             upstream commit, overrides, exclusions, and per-file hashes
 ```
 
-`sync.py` copies the upstream plugin, drops the files excluded by name, applies literal substitutions, applies overrides, then derives invocation gating from the upstream sidecars and drops them. It refuses to run against an empty submodule, refuses to run when upstream grows a directory the transformation does not handle, fails if host-specific text survives, fails if a substitution rule matched nothing that ships, and fails if a generated script cannot run.
+`sync.py` copies the upstream plugin, drops the files excluded by name, applies literal substitutions, applies overrides, derives invocation gating from the upstream sidecars and drops them, then adds the host-only files. It refuses to run against an empty submodule, refuses to run when upstream grows a directory the transformation does not handle, fails if host-specific text survives, fails if a substitution rule matched nothing that ships, and fails if a generated script cannot run.
 
 Four files diverge semantically and are kept as overrides rather than substitutions:
 
 | Override | Why |
 |---|---|
-| `skills/independent-review/SKILL.md` | Replaces Orca orchestration with fresh read-only Opus subagents dispatched through the host's own mechanism. Because a subagent shares the coordinator's model, the skill claims a fresh context rather than an independent model, and buys coverage by giving several reviewers distinct lenses. |
+| `skills/independent-review/SKILL.md` | Replaces Orca orchestration with fresh read-only subagents dispatched through the host's own mechanism, preferring the bundled `aquarium:independent-reviewer`. A reviewer runs under the same provider as the coordinator, so the skill claims a fresh context rather than an independent provider, keeps depth on Opus and breadth on Sonnet, and buys coverage by giving several reviewers distinct lenses. |
 | `skills/dev-setup/SKILL.md` | Keeps upstream's AGENTS.md-canonical repository guidance and verifies the CLAUDE.md delegation as a real `@AGENTS.md` import; offers Mulgae and Gaori MCP as a user-scope registration with `.mcp.json` as the explicit project override. The two-stage approval gate is unchanged. |
 | `skills/dev-setup/references/agents-guidance.md` | Same four-section structure as upstream. Claude Code does not read `AGENTS.md` on its own but does resolve a `@AGENTS.md` import before the first turn, so the delegation file carries the import rather than a request to go read the file, and diagnosis reports prose-only delegation as a gap. |
 | `skills/dev-setup/references/tool-catalog.md` | Registers Mulgae and Gaori MCP with `claude mcp add -s user`, keeps `.mcp.json` as the explicit project override, and verifies the user, project, and effective views from the configuration files rather than from `.codex/config.toml` and typed `codex mcp get --json` output. |

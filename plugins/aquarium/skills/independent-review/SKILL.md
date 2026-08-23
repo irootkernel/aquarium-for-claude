@@ -19,9 +19,9 @@ Explicit invocation authorizes dispatching one or more read-only reviewer subage
 
 ## Dispatch Fresh Reviewers
 
-Dispatch at least one reviewer subagent on the Opus model through the host's own subagent mechanism, and dispatch several when the target spans distinct review dimensions. Give each reviewer a distinct lens — requirements conformance, implementation correctness, test and coverage adequacy — so that additional reviewers buy coverage rather than repetition. Launch them in a single message so they run concurrently, and record which lens each one received.
+Dispatch at least one reviewer subagent through the host's own subagent mechanism, and dispatch several when the target spans distinct review dimensions. Prefer this plugin's own `aquarium:independent-reviewer` subagent type, which has no editing tools and runs on Opus. If it is absent from the host's subagent catalog, use any subagent type without editing tools and state the read-only constraint in the specification, because for a general-purpose type the specification is the only constraint there is; stop only when no subagent mechanism is available at all.
 
-Prefer a subagent type that has no editing tools. State the read-only constraint in the specification as well, because for a general-purpose type the specification is the only constraint there is.
+Give each reviewer a distinct lens — requirements conformance, implementation correctness, test and coverage adequacy — so that additional reviewers buy coverage rather than repetition. Keep the requirements and correctness lenses on Opus, and when a broad tracing lens over callers, tests, and documentation is dispatched as well, request Sonnet for it at dispatch so depth and breadth come from different models. Launch the reviewers in a single message so they run concurrently, and record which lens and which requested model each one received.
 
 Build each specification from source evidence, including the absolute repository, target identifier, authority paths, exact review snapshot or range, relevant staged and unstaged state, and the fact that tests already passed. Do not include the coordinator's suspected findings or intended fixes.
 
@@ -35,7 +35,7 @@ Require each reviewer to:
 - return exactly `APPROVE` when no actionable finding remains;
 - leave the detailed review in its final response and report no modified files.
 
-A reviewer subagent runs on the same model family as the coordinator, so what this buys is a fresh context that has not seen the coordinator's reasoning, not an independent model. Claim that guarantee and no more. Distinct lenses across several reviewers are what widen coverage.
+A reviewer subagent runs on a model this host provides, under the same provider as the coordinator. Requesting a different model per reviewer buys a different model, not an independent provider; the durable guarantee is a fresh context that has not seen the coordinator's reasoning. Claim that and no more. Distinct lenses across several reviewers are what widen coverage.
 
 ## Fail Closed on Dispatch
 
@@ -63,4 +63,4 @@ When several reviewers ran, merge overlapping findings once and keep disagreemen
 
 Do not implement a proposed response. If every reviewer returned `APPROVE`, first confirm that each examined the intended snapshot and authority, then report that no actionable feedback was found. If output is missing, scope is wrong, or dispatch failed, report the operational gap without a clean verdict.
 
-Return the target and snapshot, how many reviewers ran and with which lens, each reviewer's verdict, adjudicated findings, and recommended responses.
+Return the target and snapshot, how many reviewers ran and with which lens, subagent type, and requested model, each reviewer's verdict, adjudicated findings, and recommended responses.
