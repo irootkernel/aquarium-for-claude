@@ -6,7 +6,8 @@
 # Upstream owns the prose contract and already validates it in its own CI, so
 # this file deliberately does not re-assert skill wording. It checks only what
 # the transformation is responsible for: invocation gating, host-neutral text,
-# manifest agreement, and freshness against the pinned upstream.
+# manifest agreement, deliberate exclusions, runnable generated scripts, and
+# freshness against the pinned upstream.
 
 require "json"
 require "pathname"
@@ -35,6 +36,15 @@ assert(!skill_paths.empty?, "no skills were generated")
 
 sync_manifest = JSON.parse(PLUGIN.join("sync-manifest.json").read)
 assert(sync_manifest.dig("upstream", "commit").to_s.length == 40, "sync manifest lacks an upstream commit")
+
+# The committed output is generated from the submodule's working tree, but CI
+# regenerates from the gitlink. A checkout that moved without `git add upstream`
+# passes `--check` locally and fails in CI one push later, so assert agreement.
+gitlink = `git -C #{ROOT} ls-files -s upstream`.split[1].to_s
+assert(
+  gitlink.empty? || gitlink == sync_manifest.dig("upstream", "commit"),
+  "sync manifest commit #{sync_manifest.dig('upstream', 'commit')} differs from the staged submodule gitlink #{gitlink}; run `git add upstream`"
+)
 
 # --- invocation gating mirrors the upstream sidecar ------------------------
 
@@ -112,6 +122,18 @@ Pathname.glob(PLUGIN.join("**/*.md")).sort.each do |path|
   )
 end
 
+# The regex is the only thing standing between an upstream `$newthing` and a
+# Claude Code user, and nothing else asserts that it still works.
+assert(SIGIL.match?("$newthing"), "the sigil regex no longer matches a Codex skill sigil")
+assert(!SIGIL.match?("${CLAUDE_PLUGIN_ROOT}"), "the sigil regex must ignore shell variables")
+
+# `FORBIDDEN` in scripts/sync.py and `FORBIDDEN_TEXT` here are maintained by
+# hand; a needle added to one and not the other halves the guard.
+sync_source = ROOT.join("scripts/sync.py").read
+FORBIDDEN_TEXT.each do |needle|
+  assert(sync_source.include?(needle.inspect), "forbidden needle #{needle.inspect} is missing from scripts/sync.py")
+end
+
 assert(
   skill_paths.any? { |path| path.read.include?("/aquarium:") },
   "generated skills never reference the Claude invocation form"
@@ -122,7 +144,27 @@ if inspection.file?
   script = inspection.read
   assert(script.include?("CLAUDE_CONFIG_DIR"), "inspection must honor CLAUDE_CONFIG_DIR")
   assert(script.include?('".claude/skills"'), "inspection must search the Claude Code skill root")
+  assert(script.include?("plugin:ouroboros:ouroboros"), "inspection must probe the plugin-scoped Ouroboros MCP server")
+  assert(script.include?('"host_integration"'), "inspection must report host integration, not Codex integration")
+  assert(!script.include?('"codex_integration"'), "inspection must not report a Codex integration component")
+  assert(script.include?("registration_not_connected"), "inspection must classify registration from the Status line")
 end
+
+# --- generated scripts run -----------------------------------------------
+
+# Scripts are rewritten by literal block substitution, so a drift that parses
+# but cannot run is a realistic failure. `compile()` rather than `py_compile`:
+# the latter writes `__pycache__` into the generated tree.
+scripts = Pathname.glob(PLUGIN.join("**/*.py")).sort
+assert(!scripts.empty?, "no Python was generated")
+assert(
+  system(
+    "python3", "-c",
+    "import sys, pathlib\nfor p in sys.argv[1:]: compile(pathlib.Path(p).read_text(), p, 'exec')",
+    *scripts.map(&:to_s), out: File::NULL, err: File::NULL
+  ),
+  "generated Python does not compile"
+)
 
 # --- manifests agree with upstream -----------------------------------------
 
@@ -130,6 +172,12 @@ manifest = JSON.parse(PLUGIN.join(".claude-plugin/plugin.json").read)
 assert(manifest.fetch("skills") == "./skills/", "plugin manifest must point at ./skills/")
 assert(manifest.fetch("license") == "MIT", "plugin license must be MIT")
 assert(!manifest.fetch("description").include?("Codex"), "plugin description must not name Codex")
+
+# Upstream removed its manifest icon and logo in v0.1.10 along with the PNGs
+# they named; a reintroduced key would point at a file this artifact excludes.
+plugin_metadata = manifest.fetch("metadata")
+assert(!plugin_metadata.key?("icon") && !plugin_metadata.key?("logo"), "plugin metadata must not reference the logo assets upstream removed")
+assert(plugin_metadata.fetch("brandColor").to_s.start_with?("#"), "plugin metadata lost its brand color")
 
 if UPSTREAM_PLUGIN.directory?
   codex = JSON.parse(UPSTREAM_PLUGIN.join(".codex-plugin/plugin.json").read)
@@ -166,6 +214,41 @@ if UPSTREAM_PLUGIN.directory?
   upstream_directories.sort.each do |name|
     assert(PLUGIN.join(name).directory?, "generated plugin is missing upstream directory `#{name}/`")
   end
+end
+
+# --- deliberate exclusions --------------------------------------------------
+
+# `scripts/sync.py` drops upstream files that have no consumer in a Claude Code
+# artifact (`assets/hero.png` is a 2.3 MB README banner). Assert both halves of
+# each exclusion: the file is absent from the generated tree, and it still
+# exists upstream, or the exclusion has silently stopped applying.
+excluded = sync_manifest.fetch("excluded")
+assert(excluded.include?("assets/hero.png"), "the upstream README banner must stay excluded")
+generated_text = Pathname.glob(PLUGIN.join("**/*.{md,json,py,yaml}")).sort.reject { |p| p.basename.to_s == "sync-manifest.json" }
+excluded.each do |relative|
+  assert(!PLUGIN.join(relative).exist?, "excluded file was generated: #{relative}")
+  assert(UPSTREAM_PLUGIN.join(relative).file?, "exclusion targets a file upstream no longer ships: #{relative}") if UPSTREAM_PLUGIN.directory?
+  assert(!sync_manifest.fetch("files").key?(relative), "excluded file is listed in the sync manifest: #{relative}")
+  basename = File.basename(relative)
+  generated_text.each do |path|
+    assert(!path.read.include?(basename), "generated text references the excluded #{relative}: #{path.relative_path_from(PLUGIN)}")
+  end
+end
+
+# A name-based exclusion only catches the file it names; a size guard catches
+# the next multi-megabyte asset upstream adds under any name.
+Pathname.glob(PLUGIN.join("**/*")).select(&:file?).reject { |p| p.to_s.include?("__pycache__/") }.sort.each do |path|
+  assert(path.size <= 1_000_000, "generated file exceeds 1 MB: #{path.relative_path_from(PLUGIN)}")
+end
+
+# Every generated file is recorded, so a partial write cannot pass as complete.
+# Bytecode caches are ignored by Git and appear whenever a bundled script is
+# imported locally; they are not part of the artifact.
+Pathname.glob(PLUGIN.join("**/*")).select(&:file?).sort.each do |path|
+  relative = path.relative_path_from(PLUGIN).to_s
+  next if relative == "sync-manifest.json" || relative.include?("__pycache__/")
+
+  assert(sync_manifest.fetch("files").key?(relative), "generated file is missing from the sync manifest: #{relative}")
 end
 
 # --- roadmap commit hook ----------------------------------------------------
@@ -214,6 +297,17 @@ if UPSTREAM_PLUGIN.directory?
     )
   end
 end
+
+# --- README agrees with the generated artifact -----------------------------
+
+# The README's override table is the public explanation of every file that
+# diverges from upstream; it must name exactly the overrides the sync applied.
+readme = ROOT.join("README.md").read
+override_rows = readme.scan(/^\| `(skills\/[^`]+)` \| /).flatten.sort
+assert(
+  override_rows == sync_manifest.fetch("overrides").sort,
+  "README override table #{override_rows.inspect} does not match the applied overrides #{sync_manifest.fetch('overrides').inspect}"
+)
 
 # --- documentation convention ----------------------------------------------
 

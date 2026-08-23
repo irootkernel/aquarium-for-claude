@@ -26,7 +26,7 @@ claude plugin marketplace add irootkernel/aquarium-for-claude
 claude plugin install aquarium@aquarium-for-claude
 ```
 
-Repositories that used the Podway integration must finish or explicitly dispose of any active session before migrating, then replace the managed `root-kernel-{task,goal,validation}-v2.yaml` procedures through a separately approved `/aquarium:dev-setup` run. The inspection schema is now `aquarium-dev-setup-inspection.v6`.
+Repositories that used the Podway integration must finish or explicitly dispose of any active session before migrating, then replace the managed `root-kernel-{task,goal,validation}-v2.yaml` procedures through a separately approved `/aquarium:dev-setup` run. The inspection schema is now `aquarium-dev-setup-inspection.v7`.
 
 ## Skills
 
@@ -44,11 +44,15 @@ Repositories that used the Podway integration must finish or explicitly dispose 
 | `release-qa` | Exercise the current release candidate through read-only user scenarios covering every change since the previous stable release. | `/aquarium:release-qa` with an intended or confirmed version |
 | `dev-setup` | Diagnose and configure selected development tools, and propose reference-based instruction-file guidance behind separate approvals. | `/aquarium:dev-setup` |
 | `dev-setup-bundle` | Apply development-tool setup to explicit Git repositories from one external YAML manifest. | `/aquarium:dev-setup-bundle` with a manifest path |
+| `test-setup` | Audit, propose, and configure the common Make or Bun testing contract for one repository, including evidence-backed legacy waivers. | `/aquarium:test-setup` |
 | `independent-review` | Run a supervised read-only requirements and code review with fresh reviewer subagents, then adjudicate their findings. | `/aquarium:independent-review` with one epic or task |
+| `orca-review` | Review one exact repository snapshot through a user-selected AI CLI in Orca, with a bounded multi-agent hierarchy and local adjudication. | `/aquarium:orca-review` with a staged, working-tree, commit-range, task, or epic target |
 
 The five design skills drive Ouroboros as a bounded leaf capability and need it installed and pinned to `>=0.51.1,<0.52.0`; `/aquarium:dev-setup` diagnoses and configures it behind separate approvals. They shape documents only and never implement.
 
 `task-handler` loads seven phase skills in order — `task-plan`, `task-implement`, `task-verify`, `task-refine`, `task-document`, `task-review`, `task-close`. Invoke one directly only to resume that exact phase with its required task context.
+
+`orca-review` drives the Orca app rather than host subagents, so it needs the separately installed `orca-cli` Claude Code skill in the active catalog and a running Orca app; it loads Orca's orchestration guide through the Orca executable itself and stops, rather than approximating that contract, when the skill is absent. `independent-review` remains the subagent-based path and needs nothing extra.
 
 ### Roadmap commit guard
 
@@ -72,19 +76,19 @@ overrides/
 scripts/sync.py                  the transformation
 plugins/aquarium/                generated output, committed
   hooks/                         the roadmap commit guard
-  sync-manifest.json             upstream commit and per-file hashes
+  sync-manifest.json             upstream commit, overrides, exclusions, and per-file hashes
 ```
 
-`sync.py` copies the upstream plugin, applies literal substitutions, applies overrides, then derives invocation gating from the upstream sidecars and drops them. It refuses to run against an empty submodule, refuses to run when upstream grows a directory the transformation does not handle, and fails if host-specific text survives.
+`sync.py` copies the upstream plugin, drops the files excluded by name, applies literal substitutions, applies overrides, then derives invocation gating from the upstream sidecars and drops them. It refuses to run against an empty submodule, refuses to run when upstream grows a directory the transformation does not handle, fails if host-specific text survives, fails if a substitution rule matched nothing that ships, and fails if a generated script cannot run.
 
 Four files diverge semantically and are kept as overrides rather than substitutions:
 
 | Override | Why |
 |---|---|
 | `skills/independent-review/SKILL.md` | Replaces Orca orchestration with fresh read-only Opus subagents dispatched through the host's own mechanism. Because a subagent shares the coordinator's model, the skill claims a fresh context rather than an independent model, and buys coverage by giving several reviewers distinct lenses. |
-| `skills/dev-setup/SKILL.md` | Resolves one instruction-file target — `AGENTS.md` or `CLAUDE.md`, asking when both exist — and defaults to `CLAUDE.md`. The two-stage approval gate is unchanged. |
-| `skills/dev-setup/references/agents-guidance.md` | The whole file is instruction-file editing guidance, which is exactly what differs per host. |
-| `skills/dev-setup/references/tool-catalog.md` | Registers Mulgae and Gaori MCP servers in `.mcp.json` and verifies them with `claude mcp get`, rather than `.codex/config.toml` and typed `codex mcp get --json` output. |
+| `skills/dev-setup/SKILL.md` | Keeps upstream's AGENTS.md-canonical repository guidance and verifies the CLAUDE.md delegation as a real `@AGENTS.md` import; offers Mulgae and Gaori MCP as a user-scope registration with `.mcp.json` as the explicit project override. The two-stage approval gate is unchanged. |
+| `skills/dev-setup/references/agents-guidance.md` | Same four-section structure as upstream. Claude Code does not read `AGENTS.md` on its own but does resolve a `@AGENTS.md` import before the first turn, so the delegation file carries the import rather than a request to go read the file, and diagnosis reports prose-only delegation as a gap. |
+| `skills/dev-setup/references/tool-catalog.md` | Registers Mulgae and Gaori MCP with `claude mcp add -s user`, keeps `.mcp.json` as the explicit project override, and verifies the user, project, and effective views from the configuration files rather than from `.codex/config.toml` and typed `codex mcp get --json` output. |
 
 Everything else is a literal substitution: the `$aquarium:` sigil becomes `/aquarium:`, the `$use-*` skill sigils become `/use-*`, the Ouroboros sigils `$interview`, `$pm`, `$seed`, and `$qa` become `/ouroboros:*` because Ouroboros installs as a Claude Code plugin rather than user-scoped skills, the separately installed `$deslop` becomes `/deslop`, `request_user_input` becomes `AskUserQuestion`, Lora installs with `--agent claude-code`, the inspection script resolves skills from the Claude Code roots alone — `CLAUDE_CONFIG_DIR` and `~/.claude/skills` — and diagnoses Ouroboros against this host instead of Codex, user-scoped skills install into `~/.claude/skills`, and the hook command resolves `${CLAUDE_PLUGIN_ROOT}` instead of Codex's `${PLUGIN_ROOT}`.
 
@@ -96,11 +100,20 @@ Skill discovery narrows for the same reason. Upstream resolves user-scoped skill
 
 An unmapped sigil is the quiet failure: it is valid Markdown naming a command the reader's host does not have, so neither a forbidden needle nor a required-text assertion notices it, and one needle per known sigil only ever catches the sigils that already exist. Generation therefore rejects any remaining lowercase `$name` in generated Markdown, which is what caught the five Ouroboros and Deslop sigils upstream introduced in v0.1.9. Uppercase spellings are environment variables the generated tree still needs and do not match.
 
-The `Codex` name is otherwise forbidden in generated text. `tool-catalog.md` is exempt because it names the Codex CLI as a Mulgae provider and a required CLI version, which stays true here. The exemption records the upstream digest it was judged against, so the sync stops when that file changes.
+A literal substitution rule fails just as quietly in the other direction. v0.1.10 dropped one Oxford comma from `Ouroboros package, Codex, and runtime components` and the rule stopped matching without a word, and three script rules died in the same release when upstream extracted a shared helper and added a parameter. Every rule must now rewrite text that ships: generation counts matches outside the override targets and fails naming any rule that matched nothing, so a dead rule is deleted or re-derived deliberately instead of rotting. The phrases that only ever occurred inside an override target were deleted for the same reason; the forbidden needles and the sigil scan still catch that text if an override is ever retired.
+
+A block substitution that drifts can also produce a script that parses but cannot run. Generation compiles every generated script and checks that each call to a function defined in the same file passes an argument count its signature accepts, which is precisely what the second parameter v0.1.10 added to `classify_ouroboros_registration` would otherwise have broken on every inspection.
+
+Upstream removed `assets/logo-*.png` and the manifest's `composerIcon` and `logo` fields in v0.1.10, so the generated manifest simply loses `metadata.icon` and `metadata.logo`. It also added a 2.3 MB `assets/hero.png` banner for its own README, which nothing in the plugin references and Claude Code never renders. That file is excluded by name, with the exclusion gated on the file still existing upstream and on no generated text naming it, so it cannot quietly stop applying or quietly hide a reference.
+
+The `Codex` name is otherwise forbidden in generated text. Two files are exempt: `tool-catalog.md` names the Codex CLI as a Mulgae provider and a required CLI version, and `orca-review/references/provider-contracts.md` names it as one of the selectable third-party review providers alongside Claude, Cursor, and Kimi, both of which stay true here. Each exemption records the upstream digest it was judged against, so the sync stops when that file changes.
+
+One component is still diagnosed against the wrong host. The bundled inspector's Mulgae and Gaori MCP probes read `codex mcp get --json` and `.codex/config.toml`, which v0.1.10 expanded into a three-view global, local, and effective classification. On a machine without Codex they report `unavailable`; with Codex installed they report another host's registration state. The catalog guidance above is authoritative for this host, and re-targeting the inspector is tracked as separate work.
 
 ## Upgrade
 
 ```bash
+git submodule update --init --recursive
 git -C upstream fetch --tags origin
 git -C upstream checkout <new-tag>
 python3 scripts/sync.py
@@ -116,9 +129,10 @@ Each override records the SHA-256 of the upstream file it came from. When upstre
 python3 scripts/sync.py --check
 ruby tests/validate.rb
 git diff --check
+claude plugin validate --strict plugins/aquarium
 ```
 
-`--check` regenerates into a temporary directory and fails if the committed output drifted. The Ruby validation covers only what this repository is responsible for — invocation gating against the upstream sidecars, host-neutral generated text, the commit hook's Claude Code contract, byte-identical Podway procedures, manifest agreement, and the marketplace shape. Upstream owns the prose contract and validates it in its own CI.
+`--check` regenerates into a temporary directory and fails if the committed output drifted. The Ruby validation covers only what this repository is responsible for — invocation gating against the upstream sidecars, host-neutral generated text, the commit hook's Claude Code contract, byte-identical Podway procedures, manifest agreement, deliberate exclusions, compiled generated scripts, and the marketplace shape. Upstream owns the prose contract and validates it in its own CI. The last command is Claude Code's own plugin validator and runs locally rather than in CI.
 
 ## Documentation style
 

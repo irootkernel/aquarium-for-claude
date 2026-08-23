@@ -11,6 +11,7 @@ Run `sync.py` to regenerate, or `sync.py --check` to fail on drift.
 from __future__ import annotations
 
 import argparse
+import ast
 import filecmp
 import hashlib
 import json
@@ -40,8 +41,29 @@ DATA_SUFFIXES = (".json",)
 # integration contract requires the installed copies to match these bytes.
 SCANNED_SUFFIXES = TEXT_SUFFIXES + SCRIPT_SUFFIXES + DATA_SUFFIXES + (".yaml",)
 
+# Upstream files deliberately left out of the generated plugin. Each entry pairs
+# the path with the reason it does not belong in a Claude Code artifact. The
+# path must still exist upstream: an exclusion that quietly stops applying is
+# the same failure class as a substitution rule that stops matching.
+EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
+    (
+        "assets/hero.png",
+        "a 2.3 MB banner for the upstream repository README; upstream removed the "
+        "manifest icon and logo fields in v0.1.10, so nothing in the plugin or in "
+        "Claude Code's plugin UI can reference it",
+    ),
+)
+
 # Ordered literal substitutions applied to copied Markdown. Order matters: a
 # later rule must never rewrite text that an earlier rule already produced.
+#
+# Every rule must rewrite text that ships. Generation counts matches outside the
+# override targets and fails on a rule that matched nothing, so a dead rule is
+# deleted or re-derived deliberately instead of rotting: v0.1.10 dropped one
+# Oxford comma and a rule stopped matching in silence, leaving `Codex` in a
+# Claude artifact. Phrases that only ever occurred inside an override target
+# were deleted for the same reason; the forbidden needles and the sigil scan
+# still catch that text if an override is ever retired.
 #
 # `AGENTS.md` is deliberately absent. Upstream `dev-setup/SKILL.md` contains
 # "Do not edit nested AGENTS.md, CLAUDE.md, ...", which a blanket rule would
@@ -53,7 +75,6 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # covers the family and any later sibling; `/use-` cannot re-match it.
     ("$use-", "/use-"),
     ("$lore-commits", "/lore-commits"),
-    ("$lore-query", "/lore-query"),
     ("$orca-cli", "/orca-cli"),
     # Ouroboros installs as a Claude Code plugin, so its skills carry the
     # `ouroboros:` namespace. Codex installs them user-scoped and addresses them
@@ -66,47 +87,14 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("$qa", "/ouroboros:qa"),
     ("`request_user_input`", "`AskUserQuestion`"),
     ("Codex goal", "Claude Code todo list"),
-    ("a fresh Codex reviewer", "a fresh independent reviewer"),
-    ("one fresh Codex reviewer", "one fresh independent reviewer"),
-    ("supervised Codex reviewer", "supervised independent reviewer"),
-    ("a fresh Codex in the current", "a fresh independent reviewer in the current"),
     ("fresh Codex audit", "fresh from-scratch audit"),
-    ("direct Codex audit", "direct from-scratch audit"),
-    (" for Codex.", " for Claude Code."),
     # Ouroboros registers its skills with the host agent, so the component whose
     # health `dev-setup` establishes is the Claude Code one here. The bundle
-    # skill names the same component in a list of Ouroboros setup mutations.
+    # skill names the same component in a list of Ouroboros setup mutations;
+    # the anchor is the shortest unique phrase so the next punctuation edit
+    # cannot break it again.
     ("Codex skill health", "Claude Code skill health"),
-    (
-        "Ouroboros package, Codex, and runtime components",
-        "Ouroboros package, host integration, and runtime components",
-    ),
-    # Lora installs per host, so the catalog's scope wording and `--agent` value
-    # both move. These phrases are long enough not to collide with the
-    # instruction-file text handled by overrides.
-    ("Configure it for Codex user-global scope.", "Configure it for the Claude Code user-global scope."),
-    ("--agent codex", "--agent claude-code"),
-    ("the Codex user-global skill directory", "the Claude Code user-global skill directory"),
-    # The shared cross-agent root is not a Claude Code skill root, so a skill
-    # installed only there is never reachable as `/<skill-name>` here.
-    ("~/.agents/skills", "~/.claude/skills"),
-    # Singular form covers the plural; upstream v0.1.9 introduced "another
-    # Codex skill root" alongside the existing "Codex skill roots".
-    ("Codex skill root", "Claude Code skill root"),
-    ("a new Codex user-scoped", "a new user-scoped"),
-    (
-        "restart Codex so a new session loads the skill snapshot",
-        "restart Claude Code so a new session loads the skill snapshot",
-    ),
-    (
-        "restart Codex if the skill does not appear in the active session",
-        "restart Claude Code if the skill does not appear in the active session",
-    ),
-    ("will not load until Codex restarts", "will not load until Claude Code restarts"),
-    (
-        "the full Lore protocol into AGENTS.md",
-        "the full Lore protocol into the repository instruction file",
-    ),
+    ("Codex and runtime components", "host integration and runtime components"),
 )
 
 # Substitutions for bundled scripts, kept separate from Markdown because they
@@ -130,20 +118,33 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         '        candidates.append(Path(configured).expanduser().joinpath("skills"))\n'
         '    candidates.append(Path.home().joinpath(".claude/skills"))\n',
     ),
-    # `claude mcp get` reports a definite not-found as `No MCP server named
-    # "<name>". Configured servers: ...`, which the Codex `... found.`
-    # full-match rejects, degrading the missing case instead of naming it.
+    # `claude mcp get` reports a definite not-found on stderr as `No MCP server
+    # named "<name>". Configured servers: ...`, which carries neither the
+    # `Error:` prefix nor the ` found.` tail the shared matcher requires, so the
+    # missing case would degrade instead of naming itself. The rewrite stays
+    # local to the Ouroboros call site: upstream v0.1.10 moved the regex into
+    # `named_mcp_server_missing`, which the Mulgae and Gaori inspectors call as
+    # well, and a helper-wide rewrite would change their classification too.
     (
-        "        not_found = re.fullmatch(\n"
-        "            r\"(?:Error:\\s*)?No MCP server named ['\\\"]?ouroboros['\\\"]? found\\.?\",\n"
-        "            stderr,\n"
-        "        )\n",
-        "        not_found = re.match(\n"
-        "            r\"No MCP server named ['\\\"]?[^'\\\"]+['\\\"]?\\.\",\n"
-        "            stderr,\n"
+        "        not_found = named_mcp_server_missing(raw_probe, \"ouroboros\")\n",
+        "        # `claude mcp get` reports a definite not-found on stderr as `No MCP\n"
+        "        # server named \"<name>\". Configured servers: ...`, without the `Error:`\n"
+        "        # prefix or the ` found.` tail the shared matcher requires, so the\n"
+        "        # missing case would degrade instead of naming itself. The match stays\n"
+        "        # local to this call site because the shared helper also serves the\n"
+        "        # Mulgae and Gaori inspectors.\n"
+        "        not_found = bool(\n"
+        "            raw_probe[\"exit_code\"] == 1\n"
+        "            and not raw_probe[\"timed_out\"]\n"
+        "            and not raw_probe.get(\"stdout\", \"\").strip()\n"
+        "            and re.match(\n"
+        "                r\"No MCP server named ['\\\"]?[^'\\\"]+['\\\"]?\\.\",\n"
+        "                raw_probe.get(\"stderr\", \"\").strip(),\n"
+        "            )\n"
         "        )\n",
     ),
-    # The Codex probe returns typed JSON; the Claude one returns a rendered
+    # The Codex probe returns typed JSON whose transport upstream now compares
+    # against the discovered `ooo` executable; the Claude one returns a rendered
     # block, so the enabled/disabled decision moves to its `Status:` line.
     (
         "    parsed = parse_json_probe(raw_probe)\n"
@@ -155,19 +156,50 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    if not isinstance(result, dict):\n"
         "        probe[\"reason\"] = \"registration_result_invalid\"\n"
         "        return {\"status\": \"degraded\", \"probe\": probe}\n"
-        "    if result.get(\"enabled\") is True:\n"
+        "    transport = result.get(\"transport\")\n"
+        "    command = transport.get(\"command\") if isinstance(transport, dict) else None\n"
+        "    args = transport.get(\"args\") if isinstance(transport, dict) else None\n"
+        "    resolved_command: Path | None = None\n"
+        "    if isinstance(command, str) and command:\n"
+        "        candidate = Path(command).expanduser()\n"
+        "        if (\n"
+        "            candidate.is_absolute()\n"
+        "            and candidate.is_file()\n"
+        "            and os.access(candidate, os.X_OK)\n"
+        "        ):\n"
+        "            resolved_command = candidate.resolve()\n"
+        "        elif not candidate.is_absolute():\n"
+        "            discovered = shutil.which(command)\n"
+        "            if discovered:\n"
+        "                resolved_command = Path(discovered).resolve()\n"
+        "    registration_matches = bool(\n"
+        "        result.get(\"name\") == \"ouroboros\"\n"
+        "        and result.get(\"enabled\") is True\n"
+        "        and isinstance(transport, dict)\n"
+        "        and transport.get(\"type\") == \"stdio\"\n"
+        "        and args == [\"mcp\", \"serve\"]\n"
+        "        and resolved_command\n"
+        "        and ouroboros_executable\n"
+        "        and resolved_command == Path(ouroboros_executable).resolve()\n"
+        "    )\n"
+        "    if registration_matches:\n"
         "        return {\"status\": \"configured\", \"probe\": probe}\n"
+        "    if result.get(\"enabled\") is True:\n"
+        "        probe[\"reason\"] = \"registration_mismatch\"\n"
+        "        return {\"status\": \"degraded\", \"probe\": probe}\n"
         "    if result.get(\"enabled\") is False:\n"
         "        probe[\"reason\"] = \"registration_disabled\"\n"
         "    elif \"enabled\" not in result:\n"
         "        probe[\"reason\"] = \"registration_enabled_missing\"\n"
         "    else:\n"
         "        probe[\"reason\"] = \"registration_enabled_invalid\"\n"
-        "    return {\"status\": \"degraded\", \"probe\": probe}\n"
-        "\n",
+        "    return {\"status\": \"degraded\", \"probe\": probe}\n",
         "    # `claude mcp get` prints a human-readable block rather than typed JSON, so\n"
         "    # the registration is read from its `Status:` line. A server that resolves\n"
-        "    # but cannot connect is registered and unhealthy, not unregistered.\n"
+        "    # but cannot connect is registered and unhealthy, not unregistered. The\n"
+        "    # transport fields upstream verifies are absent for a plugin-scoped server,\n"
+        "    # which prints only `Scope:` and `Status:`, so `ouroboros_executable` cannot\n"
+        "    # be compared here.\n"
         "    status_line = \"\"\n"
         "    for line in raw_probe.get(\"stdout\", \"\").splitlines():\n"
         "        stripped = line.strip()\n"
@@ -185,7 +217,9 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # Upstream probes Codex for the Ouroboros MCP registration, so on Claude
     # Code the component could never report `configured` and every design
     # skill stayed blocked. Ouroboros registers its Claude MCP server through
-    # its own plugin, which is what this probes instead.
+    # its own plugin, which is what this probes instead. The classifier keeps
+    # its upstream arity, so `tool["executable"]` is passed at both call sites
+    # even though the Claude classifier cannot use it.
     (
         "    codex = shutil.which(\"codex\")\n"
         "    if codex:\n"
@@ -201,7 +235,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            timeout_seconds,\n"
         "        )\n"
         "        tool[\"mcp_registration\"] = classify_ouroboros_registration(\n"
-        "            registration_raw\n"
+        "            registration_raw, tool[\"executable\"]\n"
         "        )\n"
         "    else:\n"
         "        tool[\"mcp_registration\"] = {\n"
@@ -224,7 +258,8 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "                [claude_executable, \"mcp\", \"get\", \"plugin:ouroboros:ouroboros\"],\n"
         "                repository,\n"
         "                timeout_seconds,\n"
-        "            )\n"
+        "            ),\n"
+        "            tool[\"executable\"],\n"
         "        )\n"
         "        if plugin_scoped[\"status\"] == \"missing\":\n"
         "            direct = classify_ouroboros_registration(\n"
@@ -232,7 +267,8 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "                    [claude_executable, \"mcp\", \"get\", \"ouroboros\"],\n"
         "                    repository,\n"
         "                    timeout_seconds,\n"
-        "                )\n"
+        "                ),\n"
+        "                tool[\"executable\"],\n"
         "            )\n"
         "            tool[\"mcp_registration\"] = direct\n"
         "            host_integration = {\n"
@@ -304,7 +340,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    }\n",
         "    # `ooo mcp doctor` reports the CLI's own environment. This host deliberately\n"
         "    # keeps MCP 1.x there while the plugin launches the MCP 2 server in an\n"
-        "    # isolated process, so its `mcp_import` check \u2014 and the exit code with it \u2014\n"
+        "    # isolated process, so its `mcp_import` check — and the exit code with it —\n"
         "    # fails on a correctly configured machine. The remaining checks carry runtime\n"
         "    # health here; the server's own health is the registration component.\n"
         "    doctor_checks = mcp_doctor.get(\"result\")\n"
@@ -344,6 +380,12 @@ DATA_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("${PLUGIN_ROOT}", "${CLAUDE_PLUGIN_ROOT}"),
 )
 
+RULE_TABLES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
+    ("SUBSTITUTIONS", SUBSTITUTIONS),
+    ("SCRIPT_SUBSTITUTIONS", SCRIPT_SUBSTITUTIONS),
+    ("DATA_SUBSTITUTIONS", DATA_SUBSTITUTIONS),
+)
+
 # Text that must exist after transformation. A script substitution that quietly
 # stops matching would otherwise ship a script searching only Codex paths, and
 # the Markdown forbidden-check cannot see it.
@@ -355,6 +397,12 @@ REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
     ("skills/dev-setup/scripts/inspect_tools.py", "plugin:ouroboros:ouroboros"),
     ("skills/dev-setup/scripts/inspect_tools.py", '"host_integration"'),
     ("skills/dev-setup/scripts/inspect_tools.py", "doctor_checks_failed"),
+    ("skills/dev-setup/scripts/inspect_tools.py", "not_found = bool("),
+    ("skills/dev-setup/scripts/inspect_tools.py", "registration_status_missing"),
+    ("skills/dev-setup/scripts/inspect_tools.py", "registration_not_connected"),
+    # The test-setup inspector is host-neutral and copied untouched; this pins
+    # the schema it must keep announcing.
+    ("skills/test-setup/scripts/inspect_testing.py", "aquarium-test-setup-inspection.v1"),
     ("hooks/hooks.json", "${CLAUDE_PLUGIN_ROOT}"),
     ("hooks/task_commit_gate.py", "/aquarium:task-commit"),
 )
@@ -445,6 +493,21 @@ def check_upstream_directories() -> None:
         )
 
 
+def check_excluded_files() -> None:
+    """Refuse an exclusion whose target no longer exists upstream.
+
+    An exclusion names a file upstream ships and this artifact does not. Once
+    upstream renames or removes that file the entry is dead, and a dead entry
+    would hide a differently named replacement behind a decision nobody made.
+    """
+    for relative, _reason in EXCLUDED_FILES:
+        if not (UPSTREAM_PLUGIN / relative).is_file():
+            raise SyncError(
+                f"exclusion targets `{relative}`, which no longer exists upstream; "
+                "remove the exclusion or retarget it"
+            )
+
+
 def apply_substitutions(text: str) -> str:
     for old, new in SUBSTITUTIONS:
         text = text.replace(old, new)
@@ -506,6 +569,14 @@ def copy_tree(destination: Path) -> None:
             shutil.copytree(source, destination / name)
 
 
+def remove_excluded(destination: Path) -> list[str]:
+    excluded: list[str] = []
+    for relative, _reason in EXCLUDED_FILES:
+        (destination / relative).unlink()
+        excluded.append(relative)
+    return excluded
+
+
 def transform_skills(destination: Path) -> None:
     skills = destination / "skills"
     for skill in sorted(p for p in skills.iterdir() if p.is_dir()):
@@ -522,24 +593,71 @@ def transform_skills(destination: Path) -> None:
         shutil.rmtree(skill / "agents", ignore_errors=True)
 
 
-def transform_text(destination: Path) -> None:
+def rules_for(path: Path) -> tuple[str, tuple[tuple[str, str], ...]] | None:
+    if path.suffix in TEXT_SUFFIXES:
+        return RULE_TABLES[0]
+    if path.suffix in SCRIPT_SUFFIXES:
+        return RULE_TABLES[1]
+    if path.suffix in DATA_SUFFIXES:
+        return RULE_TABLES[2]
+    return None
+
+
+def transform_text(destination: Path, shadowed: set[str]) -> dict[tuple[str, int], int]:
+    """Apply the substitution tables and count how often each rule rewrote shipped text.
+
+    Files an override replaces are transformed too, which is harmless, but a
+    match there is not counted: the override discards it, so a rule that only
+    ever matched inside an override target rewrites nothing a user sees.
+    """
+    usage = {
+        (table, index): 0
+        for table, rules in RULE_TABLES
+        for index in range(len(rules))
+    }
     for path in sorted(destination.rglob("*")):
         if not path.is_file():
             continue
-        if path.suffix in TEXT_SUFFIXES:
-            rules = SUBSTITUTIONS
-        elif path.suffix in SCRIPT_SUFFIXES:
-            rules = SCRIPT_SUBSTITUTIONS
-        elif path.suffix in DATA_SUFFIXES:
-            rules = DATA_SUBSTITUTIONS
-        else:
+        selected = rules_for(path)
+        if selected is None:
             continue
+        table, rules = selected
+        counted = str(path.relative_to(destination)) not in shadowed
         original = path.read_text(encoding="utf-8")
         replaced = original
-        for old, new in rules:
-            replaced = replaced.replace(old, new)
+        for index, (old, new) in enumerate(rules):
+            matches = replaced.count(old)
+            if counted:
+                usage[(table, index)] += matches
+            if matches:
+                replaced = replaced.replace(old, new)
         if replaced != original:
             path.write_text(replaced, encoding="utf-8")
+    return usage
+
+
+def check_rule_usage(usage: dict[tuple[str, int], int]) -> None:
+    """Fail on any substitution rule that rewrote nothing the artifact ships.
+
+    A literal table is brittle to punctuation and to refactoring. v0.1.10
+    dropped one Oxford comma and extracted one helper, four Markdown rules and
+    three script rules stopped matching, and nothing noticed until a forbidden
+    needle happened to trip downstream. A rule that matched nothing is either
+    dead and must be deleted, or stale and must be re-derived; neither is a
+    decision generation may take by itself.
+    """
+    tables = dict(RULE_TABLES)
+    dead = [
+        f"  {table}[{index}]: {tables[table][index][0].splitlines()[0]!r}"
+        for (table, index), count in usage.items()
+        if count == 0
+    ]
+    if dead:
+        raise SyncError(
+            "substitution rules matched nothing that ships:\n"
+            + "\n".join(dead)
+            + "\ndelete each dead rule or re-derive it against the new upstream text"
+        )
 
 
 def check_required(destination: Path) -> None:
@@ -570,10 +688,11 @@ def check_codex_exemptions() -> set[str]:
     """Return the paths whose remaining `Codex` mentions were reviewed and kept.
 
     Some upstream text names the Codex CLI as a third-party tool rather than as
-    the host running the skill — a Mulgae provider, a required CLI version. That
-    text is correct in a Claude artifact and cannot be renamed without making it
-    false, but it still trips the `Codex` needle after an override is applied,
-    because overrides do not exempt their own content.
+    the host running the skill — a Mulgae provider, a required CLI version, one
+    of several selectable review providers. That text is correct in a Claude
+    artifact and cannot be renamed without making it false, but it still trips
+    the `Codex` needle, because neither overrides nor copies exempt their own
+    content.
 
     An exemption records that a human read every remaining mention in one file
     and confirmed each is third-party. That judgement holds only for the bytes it
@@ -717,8 +836,94 @@ def check_sigils(destination: Path) -> None:
         )
 
 
+def positional_arity_errors(tree: ast.Module) -> list[tuple[int, str]]:
+    """Report direct calls that pass a positional count a same-module signature rejects.
+
+    A block substitution that drifts can produce code that parses but cannot
+    run: v0.1.10 gave `classify_ouroboros_registration` a second parameter, and
+    a replacement block that kept calling it with one would have raised
+    `TypeError` on every inspection. Only simple shapes are checked — functions
+    without `*args`, `**kwargs`, or keyword-only parameters, called by bare name
+    with positional arguments only — which is exactly the shape the bundled
+    scripts use.
+    """
+    signatures: dict[str, tuple[int, int]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        arguments = node.args
+        if arguments.vararg or arguments.kwarg or arguments.kwonlyargs:
+            continue
+        positional = arguments.posonlyargs + arguments.args
+        signatures[node.name] = (len(positional) - len(arguments.defaults), len(positional))
+    errors: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        signature = signatures.get(node.func.id)
+        if signature is None or node.keywords:
+            continue
+        if any(isinstance(argument, ast.Starred) for argument in node.args):
+            continue
+        required, total = signature
+        if not required <= len(node.args) <= total:
+            expected = str(total) if required == total else f"{required}-{total}"
+            errors.append(
+                (
+                    node.lineno,
+                    f"{node.func.id}: {len(node.args)} positional argument(s), expected {expected}",
+                )
+            )
+    return errors
+
+
+def check_generated_python(destination: Path) -> None:
+    """Refuse generated scripts that cannot parse or call their own functions.
+
+    `ast.parse` rather than `py_compile`: the latter writes `__pycache__` into
+    the staged tree, which `--check` would then report as drift.
+    """
+    failures: list[str] = []
+    for path in sorted(destination.rglob("*.py")):
+        relative = path.relative_to(destination)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(relative))
+        except SyntaxError as error:
+            failures.append(f"  {relative}:{error.lineno}: {error.msg}")
+            continue
+        failures.extend(
+            f"  {relative}:{line}: {message}" for line, message in positional_arity_errors(tree)
+        )
+    if failures:
+        raise SyncError(
+            "generated Python cannot run — a script substitution drifted:\n" + "\n".join(failures)
+        )
+
+
+def check_excluded_references(destination: Path) -> None:
+    """Fail when generated text still names a file the exclusion removed."""
+    failures: list[str] = []
+    for relative, _reason in EXCLUDED_FILES:
+        basename = Path(relative).name
+        for path in sorted(destination.rglob("*")):
+            if not path.is_file() or path.suffix not in SCANNED_SUFFIXES:
+                continue
+            if basename in path.read_text(encoding="utf-8"):
+                failures.append(f"  {path.relative_to(destination)}: references excluded `{relative}`")
+    if failures:
+        raise SyncError(
+            "generated text references an excluded file:\n"
+            + "\n".join(failures)
+            + "\nstop excluding it or rewrite the reference"
+        )
+
+
 def write_sync_manifest(
-    destination: Path, repository: str, commit: str, overrides: list[str]
+    destination: Path,
+    repository: str,
+    commit: str,
+    overrides: list[str],
+    excluded: list[str],
 ) -> None:
     files = {
         str(path.relative_to(destination)): digest(path)
@@ -731,6 +936,7 @@ def write_sync_manifest(
             "commit": commit,
         },
         "overrides": overrides,
+        "excluded": excluded,
         "files": files,
     }
     (destination / SYNC_MANIFEST).write_text(
@@ -741,8 +947,11 @@ def write_sync_manifest(
 def generate(destination: Path) -> tuple[str, list[str]]:
     commit = upstream_commit()
     codex_exemptions = check_codex_exemptions()
+    check_excluded_files()
     copy_tree(destination)
-    transform_text(destination)
+    excluded = remove_excluded(destination)
+    usage = transform_text(destination, set(load_override_manifest()))
+    check_rule_usage(usage)
     # Overrides replace whole files, so they run before gating. Otherwise an
     # override would overwrite the frontmatter key and quietly reintroduce the
     # policy drift the sidecar is meant to prevent.
@@ -751,8 +960,10 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     write_plugin_manifest(destination)
     check_forbidden(destination, codex_exemptions)
     check_sigils(destination)
+    check_generated_python(destination)
+    check_excluded_references(destination)
     check_required(destination)
-    write_sync_manifest(destination, upstream_manifest()["repository"], commit, overrides)
+    write_sync_manifest(destination, upstream_manifest()["repository"], commit, overrides, excluded)
     return commit, overrides
 
 
@@ -814,7 +1025,7 @@ def main() -> int:
     )
     print(f"generated {len(skills)} skills from upstream {commit[:9]}")
     print(f"  {gated} gated against model invocation, {len(skills) - gated} model-invocable")
-    print(f"  {len(overrides)} overrides applied")
+    print(f"  {len(overrides)} overrides applied, {len(EXCLUDED_FILES)} upstream files excluded")
     return 0
 
 

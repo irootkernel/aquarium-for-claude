@@ -45,7 +45,9 @@ A reviewer subagent runs on the same model family as the coordinator, so what th
 
 ## Supervise and Settle
 
-Reviewers run in the background. Wait for each one to report rather than predicting its result, and give the user a progress update while waiting. Answer reviewer questions only from established repository facts; ask the user when an answer requires product intent or wider authority.
+Before dispatch, disclose and record one cumulative liveness budget of wall-clock time since dispatch, using 30 minutes unless the user explicitly selected another duration. Reviewers run in the background. Wait for each one to report rather than predicting its result, and give the user a progress update while waiting. Answer reviewer questions only from established repository facts; ask the user when an answer requires product intent or wider authority.
+
+When the budget elapses before every reviewer has reported, stop waiting, leave any running reviewer alone, and report the review as operationally incomplete with each reviewer's dispatch status. Further waiting requires an explicit user request; never re-dispatch, cancel, or replace a running reviewer automatically.
 
 Process every returned review in full. Keep technical review evidence and dispatch status as separate statuses, so a reviewer that never ran is never read as a clean verdict.
 
