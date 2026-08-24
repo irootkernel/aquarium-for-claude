@@ -1,6 +1,7 @@
 ---
 name: release-handler
 description: "Prepare, validate, publish, or retarget one stable release with cumulative changelog settlement. Use when the user explicitly invokes /aquarium:release-handler for one intended version or planned next version."
+argument-hint: "[version]"
 disable-model-invocation: true
 ---
 

@@ -70,6 +70,7 @@ ARGUMENT_HINTS: dict[str, str] = {
     "task-document": "<roadmap-path> <task-id>",
     "task-review": "<roadmap-path> <task-id>",
     "task-close": "<roadmap-path> <task-id>",
+    "release-handler": "[version]",
     "release-qa": "[version]",
     "dev-setup-bundle": "<manifest-path>",
     "independent-review": "<target> [task-or-epic-id]",
