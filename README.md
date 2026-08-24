@@ -2,7 +2,15 @@
 
 Aquarium development skills packaged as a Claude Code plugin marketplace. This repository is a **generated artifact**: the source of truth is the Codex plugin at [irootkernel/aquarium](https://github.com/irootkernel/aquarium), pinned here as a submodule and transformed by `scripts/sync.py`.
 
+English · [한국어](README.ko.md)
+
 By [Root Kernel](https://home.rootkernel.xyz) · Support: [cs@rootkernel.xyz](mailto:cs@rootkernel.xyz)
+
+## Aquarium Editions
+
+- [Aquarium](https://github.com/irootkernel/aquarium) — Codex
+- [Aquarium for Kimi](https://github.com/irootkernel/aquarium-for-kimi)
+- [Aquarium for GLM](https://github.com/irootkernel/aquarium-for-glm)
 
 ## Install
 

@@ -16,13 +16,19 @@ Aquarium for Claude is a generated Claude Code plugin marketplace, and this file
 - Avoid speculative features, abstractions, configurability, and compatibility layers.
 - Simplify an implementation whose size or complexity is not justified by its behavior.
 
-### 3. Make Surgical Changes
+### 3. Prefer Durable Root-Cause Solutions
+
+- Address the verified root cause with the smallest complete approach, weighing correctness, maintainability, and structural fit rather than diff size.
+- Prefer a durable design over a symptomatic patch; when the ideal design exceeds the current scope, ship a bounded step that fully satisfies the current success criteria and leaves a clear path forward.
+- Record only remaining independent actionable work in the repository's canonical owner, and never defer work that current correctness or acceptance requires.
+
+### 4. Make Surgical Changes
 
 - Touch only what the requested outcome and its verification require.
 - Preserve unrelated work and match local style.
 - Remove only artifacts made obsolete by the current change.
 
-### 4. Work Toward Verifiable Goals
+### 5. Work Toward Verifiable Goals
 
 - Define success checks before implementation.
 - Match verification strength to the claimed behavior and relevant failure paths.
