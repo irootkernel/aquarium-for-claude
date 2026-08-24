@@ -144,7 +144,7 @@ git diff --check
 claude plugin validate --strict plugins/aquarium
 ```
 
-`--check` regenerates into a temporary directory and fails if the committed output drifted. The Ruby validation covers only what this repository is responsible for — invocation gating against the upstream sidecars, host-neutral generated text, the commit hook's Claude Code contract, byte-identical Podway procedures, manifest agreement, deliberate exclusions, compiled generated scripts, and the marketplace shape. The Python test covers the one piece of behaviour this repository authors, the Claude Code MCP inspection. Upstream owns the prose contract and validates it in its own CI. The last command is Claude Code's own plugin validator and runs locally rather than in CI.
+`--check` regenerates into a temporary directory and fails if the committed output drifted. The Ruby validation covers only what this repository is responsible for — invocation gating against the upstream sidecars, host-neutral generated text, the commit hook's Claude Code contract, byte-identical Podway procedures, manifest agreement, deliberate exclusions, compiled generated scripts, and the marketplace shape. The two forbidden-needle lists are compared as sets, because the guard is only as wide as its narrower half and a needle added to one side alone reports healthy. The Python test covers the one piece of behaviour this repository authors, the Claude Code MCP inspection. Upstream owns the prose contract and validates it in its own CI. The last command is Claude Code's own plugin validator and runs locally rather than in CI.
 
 ## Documentation style
 

@@ -93,7 +93,8 @@ end
 # --- host-neutral generated text -------------------------------------------
 
 FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$lore-", "$orca-cli", "request_user_input",
-                  "--agent codex", "${PLUGIN_ROOT}", ".codex/config", "Codex"].freeze
+                  "--agent codex", "~/.agents/skills", "${PLUGIN_ROOT}", ".codex/config",
+                  "Codex"].freeze
 
 # Some upstream text names the Codex CLI as a third-party tool rather than as the
 # host — a Mulgae provider, a required CLI version — and stays correct here. Each
@@ -136,11 +137,39 @@ assert(SIGIL.match?("$newthing"), "the sigil regex no longer matches a Codex ski
 assert(!SIGIL.match?("${CLAUDE_PLUGIN_ROOT}"), "the sigil regex must ignore shell variables")
 
 # `FORBIDDEN` in scripts/sync.py and `FORBIDDEN_TEXT` here are maintained by
-# hand; a needle added to one and not the other halves the guard.
-sync_source = ROOT.join("scripts/sync.py").read
-FORBIDDEN_TEXT.each do |needle|
-  assert(sync_source.include?(needle.inspect), "forbidden needle #{needle.inspect} is missing from scripts/sync.py")
+# hand; a needle added to one and not the other halves the guard. Comparing the
+# two as sets closes both directions: a Ruby-only needle would let generation
+# write text CI then rejects, and a Python-only needle would leave the artifact
+# unguarded whenever the generated tree is checked without regenerating it.
+# `~/.agents/skills` was Python-only until this check existed.
+#
+# The needles are read by parsing scripts/sync.py rather than executing it, and
+# through a real Python parser rather than a regex, so a literal carrying a
+# quote or a backslash cannot silently drop out of the comparison.
+EXTRACT_FORBIDDEN = <<~PYTHON
+  import ast, json, pathlib
+
+  tree = ast.parse(pathlib.Path("scripts/sync.py").read_text())
+  for node in tree.body:
+      target = getattr(node, "target", None)
+      if getattr(target, "id", None) == "FORBIDDEN":
+          print(json.dumps([pair.elts[0].value for pair in node.value.elts]))
+          break
+  else:
+      raise SystemExit("FORBIDDEN not found in scripts/sync.py")
+PYTHON
+
+sync_needles = begin
+  raw = IO.popen(["python3", "-c", EXTRACT_FORBIDDEN], chdir: ROOT.to_s, &:read)
+  assert($?.success?, "could not read FORBIDDEN from scripts/sync.py")
+  JSON.parse(raw).to_set
 end
+
+assert(
+  sync_needles == FORBIDDEN_TEXT.to_set,
+  "forbidden needles disagree: only in scripts/sync.py #{(sync_needles - FORBIDDEN_TEXT.to_set).to_a.inspect}, " \
+  "only in tests/validate.rb #{(FORBIDDEN_TEXT.to_set - sync_needles).to_a.inspect}"
+)
 
 assert(
   skill_paths.any? { |path| path.read.include?("/aquarium:") },
