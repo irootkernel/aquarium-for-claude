@@ -1,8 +1,8 @@
 {
   "name": "aquarium",
   "displayName": "Aquarium",
-  "version": "0.1.10",
-  "description": "AI Fleet engineering workflows for governed design, delivery, review, validation, testing, and release.",
+  "version": "0.1.11",
+  "description": "AI Fleet engineering workflows for governed design, documentation, delivery, review, validation, testing, and release lifecycle management.",
   "author": {
     "name": "Root Kernel",
     "email": "cs@rootkernel.xyz",
@@ -35,7 +35,8 @@
     "gaori",
     "podway",
     "ouroboros",
-    "design"
+    "design",
+    "documentation"
   ],
   "skills": "./skills/",
   "metadata": {

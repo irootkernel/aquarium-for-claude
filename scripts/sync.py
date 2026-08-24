@@ -72,7 +72,7 @@ ARGUMENT_HINTS: dict[str, str] = {
     "task-close": "<roadmap-path> <task-id>",
     "release-qa": "[version]",
     "dev-setup-bundle": "<manifest-path>",
-    "independent-review": "<epic-or-task-id>",
+    "independent-review": "<target> [task-or-epic-id]",
     "orca-review": "<target> [task-or-epic-id]",
 }
 
@@ -105,6 +105,25 @@ EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
 # corrupt into "nested CLAUDE.md, CLAUDE.md". Instruction-file wording is
 # handled by full-file overrides instead.
 SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
+    # Upstream's Orca supervision reference is one document serving two skills.
+    # Its `$aquarium:orca-review` clause is correct here — that skill still
+    # drives Orca — but its `$aquarium:independent-review` clause is not: this
+    # artifact's independent review dispatches host subagents and never starts
+    # an Orca worker, and that one sentence carries both the `Codex` and the
+    # `--agent codex` needle. Deleting exactly it leaves the backend contract
+    # true for the skill that still uses it. The anchor holds an unsubstituted
+    # sigil, so this rule must run before the `$aquarium:` rule.
+    #
+    # The file is deliberately not an override: at v0.1.11 its line 5 is the
+    # only `$orca-cli` that ships, so shadowing the file would drive that rule
+    # to zero matches and force its deletion — retiring a sigil guard for one
+    # clause.
+    (
+        "Create one Run and Task. For `$aquarium:independent-review`, start one fresh "
+        "Codex with the live guide's supervised `worker-start --worktree current "
+        "--agent codex` path. Do not reuse a terminal or create another Git worktree.",
+        "Create one Run and Task. Do not reuse a terminal or create another Git worktree.",
+    ),
     ("$aquarium:", "/aquarium:"),
     # `$use-podway`, `$use-sanho`, `$use-mulgae`, `$use-gaori`. A prefix rule
     # covers the family and any later sibling; `/use-` cannot re-match it.
@@ -130,6 +149,13 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # cannot break it again.
     ("Codex skill health", "Claude Code skill health"),
     ("Codex and runtime components", "host integration and runtime components"),
+    # `non-Codex` only means something against a canonical reviewer that is
+    # Codex. Here the canonical reviewer is a fresh Claude subagent, so the
+    # phrase is false by implication rather than merely host-specific, and an
+    # exemption would preserve it. One consonant-initial adjective keeps both
+    # occurrences grammatical and matches the vocabulary the README already uses
+    # for the providers `orca-review` selects.
+    ("non-Codex", "third-party"),
 )
 
 # Substitutions for bundled scripts, kept separate from Markdown because they
@@ -984,7 +1010,7 @@ FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("$lore-", "add a substitution rule"),
     ("$orca-cli", "add a substitution rule"),
     ("request_user_input", "add a substitution rule or an override"),
-    ("--agent codex", "add an override"),
+    ("--agent codex", "add a substitution rule or an override"),
     ("~/.agents/skills", "Claude Code loads ~/.claude/skills; add a substitution rule"),
     ("${PLUGIN_ROOT}", "Claude Code expands ${CLAUDE_PLUGIN_ROOT}; add a data substitution"),
     (".codex/config", "Claude Code registers MCP servers in .claude.json and .mcp.json; add a substitution rule"),
