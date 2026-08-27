@@ -92,7 +92,7 @@ end
 
 # --- host-neutral generated text -------------------------------------------
 
-FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$lore-", "$orca-cli", "request_user_input",
+FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$create-", "$lore-", "$orca-cli", "request_user_input",
                   "--agent codex", "~/.agents/skills", "${PLUGIN_ROOT}", ".codex/config",
                   "Codex"].freeze
 
@@ -185,13 +185,19 @@ if inspection.file?
   assert(script.include?('"host_integration"'), "inspection must report host integration, not Codex integration")
   assert(!script.include?('"codex_integration"'), "inspection must not report a Codex integration component")
   assert(script.include?("registration_not_connected"), "inspection must classify registration from the Status line")
+  # The Ouroboros MCP runtime derives from the plugin-scoped registration — the
+  # Claude analog of upstream's isolated launcher — and the base-environment
+  # doctor is never run for it.
+  assert(script.include?("plugin_launcher_configured"), "inspection must derive the Ouroboros runtime from the plugin-scoped registration")
+  assert(!script.include?('"mcp", "doctor"'), "inspection must not run ooo mcp doctor for the plugin launcher")
   # Mulgae and Gaori registrations are read from Claude Code configuration, never
   # probed through another host's CLI and never by starting the server.
   assert(script.include?("def inspect_claude_mcp("), "inspection must read Mulgae and Gaori MCP registrations from Claude Code configuration")
   assert(script.include?('".mcp.json"'), "inspection must read the project MCP registration file")
   # Upstream's Codex-based probe helpers stay defined but must have no callers:
   # each name may appear exactly once, at its `def`.
-  %w[mcp_registration_probe classify_mulgae_mcp_scope classify_gaori_mcp_scope effective_mcp_registration].each do |helper|
+  %w[mcp_registration_probe classify_mulgae_mcp_scope classify_gaori_mcp_scope effective_mcp_registration
+     ouroboros_direct_launcher_matches ouroboros_isolated_launcher_matches].each do |helper|
     assert(script.scan("#{helper}(").length == 1, "inspection must not call the Codex-based #{helper}")
   end
   assert(!script.include?('"mcp", "get", "mulgae"') && !script.include?('"mcp", "get", "gaori"'), "inspection must not health-check Mulgae or Gaori through claude mcp get")

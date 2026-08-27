@@ -129,6 +129,12 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # `$use-podway`, `$use-sanho`, `$use-mulgae`, `$use-gaori`. A prefix rule
     # covers the family and any later sibling; `/use-` cannot re-match it.
     ("$use-", "/use-"),
+    # `$create-podway-procedure`, new in v0.1.13. A prefix rule covers the
+    # family like `$use-`; the maintainer authoring skill installs user-scoped
+    # on both hosts and keeps a bare name. Its one shipped occurrence is
+    # references/podway-integration.md — the agents-guidance.md occurrence
+    # lives inside an override and is not counted.
+    ("$create-", "/create-"),
     ("$lore-commits", "/lore-commits"),
     ("$orca-cli", "/orca-cli"),
     # Ouroboros installs as a Claude Code plugin, so its skills carry the
@@ -205,9 +211,11 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            )\n"
         "        )\n",
     ),
-    # The Codex probe returns typed JSON whose transport upstream now compares
-    # against the discovered `ooo` executable; the Claude one returns a rendered
-    # block, so the enabled/disabled decision moves to its `Status:` line.
+    # The Codex probe returns typed JSON whose transport upstream compares, via
+    # the v0.1.13 direct and isolated launcher matchers, against its supported
+    # launch shapes; the Claude probe returns a rendered block, so the
+    # enabled/disabled decision moves to its `Status:` line and the matchers
+    # stay defined but uncalled.
     (
         "    parsed = parse_json_probe(raw_probe)\n"
         "    if parsed.get(\"error_code\") == \"invalid_json\":\n"
@@ -219,32 +227,17 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        probe[\"reason\"] = \"registration_result_invalid\"\n"
         "        return {\"status\": \"degraded\", \"probe\": probe}\n"
         "    transport = result.get(\"transport\")\n"
-        "    command = transport.get(\"command\") if isinstance(transport, dict) else None\n"
-        "    args = transport.get(\"args\") if isinstance(transport, dict) else None\n"
-        "    resolved_command: Path | None = None\n"
-        "    if isinstance(command, str) and command:\n"
-        "        candidate = Path(command).expanduser()\n"
-        "        if (\n"
-        "            candidate.is_absolute()\n"
-        "            and candidate.is_file()\n"
-        "            and os.access(candidate, os.X_OK)\n"
-        "        ):\n"
-        "            resolved_command = candidate.resolve()\n"
-        "        elif not candidate.is_absolute():\n"
-        "            discovered = shutil.which(command)\n"
-        "            if discovered:\n"
-        "                resolved_command = Path(discovered).resolve()\n"
-        "    registration_matches = bool(\n"
+        "    direct_registration_matches = bool(\n"
         "        result.get(\"name\") == \"ouroboros\"\n"
         "        and result.get(\"enabled\") is True\n"
-        "        and isinstance(transport, dict)\n"
-        "        and transport.get(\"type\") == \"stdio\"\n"
-        "        and args == [\"mcp\", \"serve\"]\n"
-        "        and resolved_command\n"
-        "        and ouroboros_executable\n"
-        "        and resolved_command == Path(ouroboros_executable).resolve()\n"
+        "        and ouroboros_direct_launcher_matches(transport, ouroboros_executable)\n"
         "    )\n"
-        "    if registration_matches:\n"
+        "    isolated_registration_matches = bool(\n"
+        "        result.get(\"name\") == \"ouroboros\"\n"
+        "        and result.get(\"enabled\") is True\n"
+        "        and ouroboros_isolated_launcher_matches(transport)\n"
+        "    )\n"
+        "    if direct_registration_matches or isolated_registration_matches:\n"
         "        return {\"status\": \"configured\", \"probe\": probe}\n"
         "    if result.get(\"enabled\") is True:\n"
         "        probe[\"reason\"] = \"registration_mismatch\"\n"
@@ -279,11 +272,17 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # Upstream probes Codex for the Ouroboros MCP registration, so on Claude
     # Code the component could never report `configured` and every design
     # skill stayed blocked. Ouroboros registers its Claude MCP server through
-    # its own plugin, which is what this probes instead. The classifier keeps
+    # its own plugin, which is what this probes instead. The block swallows
+    # upstream's `direct_runtime_configured` / `isolated_runtime_configured`
+    # locals and the `registration_raw` reads together with the probe: the two
+    # runtime rules below replace every downstream consumer, and a narrower
+    # cut would ship NameErrors the AST gate cannot see. The classifier keeps
     # its upstream arity, so `tool["executable"]` is passed at both call sites
     # even though the Claude classifier cannot use it.
     (
         "    codex = shutil.which(\"codex\")\n"
+        "    direct_runtime_configured = False\n"
+        "    isolated_runtime_configured = False\n"
         "    if codex:\n"
         "        registration_raw = run_command(\n"
         "            [\n"
@@ -298,6 +297,23 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        )\n"
         "        tool[\"mcp_registration\"] = classify_ouroboros_registration(\n"
         "            registration_raw, tool[\"executable\"]\n"
+        "        )\n"
+        "        parsed_registration = parse_json_probe(registration_raw)\n"
+        "        registration_result = parsed_registration.get(\"result\")\n"
+        "        registration_transport = (\n"
+        "            registration_result.get(\"transport\")\n"
+        "            if isinstance(registration_result, dict)\n"
+        "            else None\n"
+        "        )\n"
+        "        direct_runtime_configured = tool[\"mcp_registration\"][\n"
+        "            \"status\"\n"
+        "        ] == \"configured\" and ouroboros_direct_launcher_matches(\n"
+        "            registration_transport, tool[\"executable\"]\n"
+        "        )\n"
+        "        isolated_runtime_configured = tool[\"mcp_registration\"][\n"
+        "            \"status\"\n"
+        "        ] == \"configured\" and ouroboros_isolated_launcher_matches(\n"
+        "            registration_transport\n"
         "        )\n"
         "    else:\n"
         "        tool[\"mcp_registration\"] = {\n"
@@ -388,44 +404,107 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            \"probe\": skipped_probe(\"executable_missing\"),\n"
         "        }\n",
     ),
+    # Upstream's not-installed path still classifies the MCP runtime from its
+    # Codex launcher booleans, which the probe rule above removes. A configured
+    # plugin-scoped registration proves a configured runtime even without the
+    # `ooo` CLI; with neither there is nothing to verify, so upstream's middle
+    # `elif codex:` unverifiable arm deliberately collapses into `missing`.
+    (
+        "        if isolated_runtime_configured:\n"
+        "            runtime_probe = normalized_probe(registration_raw)\n"
+        "            runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"configured\",\n"
+        "                \"probe\": runtime_probe,\n"
+        "            }\n"
+        "        elif codex:\n"
+        "            registration_reason = (\n"
+        "                tool[\"mcp_registration\"].get(\"probe\", {}).get(\"reason\")\n"
+        "            )\n"
+        "            runtime_reason = (\n"
+        "                \"registration_not_supported_launcher\"\n"
+        "                if registration_reason in {None, \"registration_mismatch\"}\n"
+        "                else registration_reason\n"
+        "            )\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"unverifiable\",\n"
+        "                \"probe\": skipped_probe(runtime_reason),\n"
+        "            }\n"
+        "        else:\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"missing\",\n"
+        "                \"probe\": skipped_probe(\"executable_missing\"),\n"
+        "            }\n",
+        "        if host_integration[\"status\"] == \"configured\":\n"
+        "            runtime_probe = dict(host_integration[\"probe\"])\n"
+        "            runtime_probe[\"reason\"] = \"plugin_launcher_configured\"\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"configured\",\n"
+        "                \"probe\": runtime_probe,\n"
+        "            }\n"
+        "        else:\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"missing\",\n"
+        "                \"probe\": skipped_probe(\"executable_missing\"),\n"
+        "            }\n",
+    ),
     # ...and the readiness rollup reads the renamed component.
     (
         "        and tool[\"codex_integration\"][\"status\"] == \"configured\"\n",
         "        and tool[\"host_integration\"][\"status\"] == \"configured\"\n",
     ),
-    # Upstream reads this component from the doctor's exit code, which cannot
-    # succeed on a host whose MCP 2 server lives outside the CLI environment.
+    # Upstream derives this component from its launcher classification and runs
+    # `ooo mcp doctor --json` only when Codex directly launches the selected
+    # executable. The plugin-scoped registration is the runtime signal here, so
+    # the doctor, which inspects the CLI's own package environment, never runs.
     (
-        "    tool[\"mcp_runtime\"] = {\n"
-        "        \"status\": \"configured\" if mcp_doctor[\"ok\"] else \"degraded\",\n"
-        "        \"probe\": normalized_probe(mcp_doctor),\n"
-        "    }\n",
-        "    # `ooo mcp doctor` reports the CLI's own environment. This host deliberately\n"
-        "    # keeps MCP 1.x there while the plugin launches the MCP 2 server in an\n"
-        "    # isolated process, so its `mcp_import` check — and the exit code with it —\n"
-        "    # fails on a correctly configured machine. The remaining checks carry runtime\n"
-        "    # health here; the server's own health is the registration component.\n"
-        "    doctor_checks = mcp_doctor.get(\"result\")\n"
-        "    runtime_probe = normalized_probe(mcp_doctor)\n"
-        "    if isinstance(doctor_checks, list):\n"
-        "        failed = sorted(\n"
-        "            str(check.get(\"name\"))\n"
-        "            for check in doctor_checks\n"
-        "            if isinstance(check, dict)\n"
-        "            and check.get(\"status\") == \"fail\"\n"
-        "            and check.get(\"name\") != \"mcp_import\"\n"
-        "        )\n"
-        "        if failed:\n"
-        "            runtime_probe[\"reason\"] = \"doctor_checks_failed\"\n"
+        "    if isolated_runtime_configured:\n"
+        "        runtime_probe = normalized_probe(registration_raw)\n"
+        "        runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
         "        tool[\"mcp_runtime\"] = {\n"
-        "            \"status\": \"degraded\" if failed else \"configured\",\n"
-        "            \"failed_checks\": failed,\n"
+        "            \"status\": \"configured\",\n"
+        "            \"probe\": runtime_probe,\n"
+        "        }\n"
+        "    elif direct_runtime_configured:\n"
+        "        mcp_doctor = json_probe(\n"
+        "            [tool[\"executable\"], \"mcp\", \"doctor\", \"--json\"],\n"
+        "            repository,\n"
+        "            timeout_seconds,\n"
+        "        )\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"configured\" if mcp_doctor[\"ok\"] else \"degraded\",\n"
+        "            \"probe\": normalized_probe(mcp_doctor),\n"
+        "        }\n"
+        "    else:\n"
+        "        registration_reason = tool[\"mcp_registration\"].get(\"probe\", {}).get(\"reason\")\n"
+        "        runtime_reason = (\n"
+        "            \"registration_not_supported_launcher\"\n"
+        "            if registration_reason in {None, \"registration_mismatch\"}\n"
+        "            else registration_reason\n"
+        "        )\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"unverifiable\",\n"
+        "            \"probe\": skipped_probe(runtime_reason),\n"
+        "        }\n",
+        "    # The plugin launches the MCP 2 server in an isolated process, the Claude\n"
+        "    # analog of upstream's isolated `uvx` launcher, so the plugin-scoped\n"
+        "    # registration resolved above is the runtime signal. `ooo mcp doctor`\n"
+        "    # inspects the CLI's own package environment and is not evidence about\n"
+        "    # that server, so it is never run here.\n"
+        "    if host_integration[\"status\"] == \"configured\":\n"
+        "        runtime_probe = dict(host_integration[\"probe\"])\n"
+        "        runtime_probe[\"reason\"] = \"plugin_launcher_configured\"\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"configured\",\n"
         "            \"probe\": runtime_probe,\n"
         "        }\n"
         "    else:\n"
+        "        registration_reason = tool[\"mcp_registration\"].get(\"probe\", {}).get(\"reason\")\n"
         "        tool[\"mcp_runtime\"] = {\n"
-        "            \"status\": \"degraded\",\n"
-        "            \"probe\": runtime_probe,\n"
+        "            \"status\": \"unverifiable\",\n"
+        "            \"probe\": skipped_probe(\n"
+        "                registration_reason or \"registration_not_supported_launcher\"\n"
+        "            ),\n"
         "        }\n",
     ),
     # Upstream inspects the Mulgae and Gaori MCP registrations through the Codex
@@ -986,7 +1065,10 @@ REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
     # would stop them matching and silently restore the Codex-only inspection.
     ("skills/dev-setup/scripts/inspect_tools.py", "plugin:ouroboros:ouroboros"),
     ("skills/dev-setup/scripts/inspect_tools.py", '"host_integration"'),
-    ("skills/dev-setup/scripts/inspect_tools.py", "doctor_checks_failed"),
+    # The runtime component derives from the plugin-scoped registration and
+    # never runs `ooo mcp doctor`; both reasons exist only in the replacement.
+    ("skills/dev-setup/scripts/inspect_tools.py", "plugin_launcher_configured"),
+    ("skills/dev-setup/scripts/inspect_tools.py", "registration_not_supported_launcher"),
     ("skills/dev-setup/scripts/inspect_tools.py", "not_found = bool("),
     ("skills/dev-setup/scripts/inspect_tools.py", "registration_status_missing"),
     ("skills/dev-setup/scripts/inspect_tools.py", "registration_not_connected"),
@@ -1008,6 +1090,7 @@ REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
 FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("$aquarium:", "add a substitution rule"),
     ("$use-", "add a substitution rule"),
+    ("$create-", "add a substitution rule"),
     ("$lore-", "add a substitution rule"),
     ("$orca-cli", "add a substitution rule"),
     ("request_user_input", "add a substitution rule or an override"),
