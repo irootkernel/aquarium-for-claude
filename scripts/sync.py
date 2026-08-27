@@ -172,6 +172,19 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # occurrences grammatical and matches the vocabulary the README already uses
     # for the providers `orca-review` selects.
     ("non-Codex", "third-party"),
+    # release-qa's dispatch instructions are host-neutral because Codex has no
+    # first-class subagents. This host does: the Task tool is the delegation
+    # surface, and independent subagents launched in a single message is what
+    # parallel dispatch concretely means here. Naming both follows upstream's
+    # own charter of making supported native capabilities readily usable.
+    (
+        "Use the available agent delegation surface to dispatch fresh subagents for independent risk clusters.",
+        "Use the Task tool to dispatch fresh subagents for independent risk clusters.",
+    ),
+    (
+        "Parallelize independent clusters when capacity allows without weakening isolation.",
+        "Parallelize independent clusters by launching their workers in a single message when capacity allows, without weakening isolation.",
+    ),
 )
 
 # Substitutions for bundled scripts, kept separate from Markdown because they

@@ -109,13 +109,13 @@ Do not run existing automated tests, `make test`, test runners, test scripts, li
 
 ## Dispatch Fresh Scenario Agents
 
-Use the available agent delegation surface to dispatch fresh subagents for independent risk clusters. Give each worker only the exact candidate paths, raw baseline contract and delta relevant to its cluster, assigned `/tmp` fixture, and scenario objective. Do not disclose suspected findings, expected defects, intended fixes, or another worker's output.
+Use the Task tool to dispatch fresh subagents for independent risk clusters. Give each worker only the exact candidate paths, raw baseline contract and delta relevant to its cluster, assigned `/tmp` fixture, and scenario objective. Do not disclose suspected findings, expected defects, intended fixes, or another worker's output.
 
 Require every worker to avoid existing test commands, source-repository writes, network access, credentials, global state, remediation, release-readiness decisions, and next-action recommendations. A worker may mutate only its assigned fixture and must return commands, observations, evidence paths, and source-repository status; the coordinator alone assigns final severity and status.
 
 Each worker must also write one bounded `aquarium-release-qa-cluster-result/v1` JSON file beneath its assigned physical evidence root. It records the exact candidate, stable cluster ID, source status before and after, and every stable scenario ID with sources, procedure, controlled environment, expected and observed outcomes, `pass`, `finding`, or `gap`, regular non-symlink evidence files, and verified finding identities. Cluster and scenario IDs are globally unique for the pass.
 
-Do not replace an unavailable, failed, or timed-out fresh worker with coordinator execution or static review. Mark its required coverage as missing and return `INCOMPLETE`. Parallelize independent clusters when capacity allows without weakening isolation.
+Do not replace an unavailable, failed, or timed-out fresh worker with coordinator execution or static review. Mark its required coverage as missing and return `INCOMPLETE`. Parallelize independent clusters by launching their workers in a single message when capacity allows, without weakening isolation.
 
 Adjudicate every worker report against the release contract and candidate. Reproduce a suspected defect in a clean sibling fixture or confirm it directly from deterministic evidence before accepting it. Put unreproduced, environment-dependent, or authority-dependent claims under evidence gaps, not findings.
 
