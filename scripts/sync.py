@@ -157,6 +157,14 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ),
     ("`request_user_input`", "`AskUserQuestion`"),
     ("Codex goal", "Claude Code todo list"),
+    # ouroboros-integration.md names the mirrored surface generically as "the
+    # host goal mechanism". The mechanism has a name on this host — the todo
+    # list written through `TodoWrite` — and naming it tells the model how to
+    # mirror, not merely where, matching the `Codex goal` mapping above.
+    (
+        "mirror only the current actionable goal into the host goal mechanism",
+        "mirror only the current actionable goal into the Claude Code todo list via `TodoWrite`",
+    ),
     ("fresh Codex audit", "fresh from-scratch audit"),
     # Ouroboros registers its skills with the host agent, so the component whose
     # health `dev-setup` establishes is the Claude Code one here. The bundle
