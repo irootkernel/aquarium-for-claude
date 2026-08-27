@@ -146,6 +146,15 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("$seed", "/ouroboros:seed"),
     ("$pm", "/ouroboros:pm"),
     ("$qa", "/ouroboros:qa"),
+    # task-close hedges its structured closeout ask on availability because the
+    # Codex tool is optional there. `AskUserQuestion` is always present on this
+    # host, so the hedge would read as permission to fall back to prose. Must
+    # run before the generic `request_user_input` rule, whose output the anchor
+    # would otherwise never contain — the orca-supervision precedent.
+    (
+        "Use structured `request_user_input` when available and ask all three questions together",
+        "Use structured `AskUserQuestion` and ask all three questions together",
+    ),
     ("`request_user_input`", "`AskUserQuestion`"),
     ("Codex goal", "Claude Code todo list"),
     ("fresh Codex audit", "fresh from-scratch audit"),

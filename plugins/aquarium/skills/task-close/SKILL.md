@@ -29,7 +29,7 @@ If the user keeps the task non-terminal or cancels, do not commit and return the
 
 ## Ask for Final Approval
 
-Present or identify the exact final task diff, selected status edit, and whether a commit is proposed. Use structured `AskUserQuestion` when available and ask all three questions together:
+Present or identify the exact final task diff, selected status edit, and whether a commit is proposed. Use structured `AskUserQuestion` and ask all three questions together:
 
 1. Tests: "Have you reviewed the current applicable test evidence, including who ran each check, and accepted it for this final implementation?" Offer `Evidence accepted`, `Not yet or failed`, and `Not applicable`.
 2. Documentation: "Have you reviewed and accepted the documentation and roadmap changes in this final diff?" Offer `Docs approved`, `Needs revision`, and `Not applicable`.
