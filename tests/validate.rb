@@ -66,7 +66,15 @@ skill_paths.each do |path|
   # policy. If these ever disagree, a mutating skill could fire without the
   # user asking for it, so the relationship is asserted as a biconditional.
   sidecar_path = UPSTREAM_PLUGIN.join("skills/#{name}/agents/openai.yaml")
-  next unless sidecar_path.file?
+  unless sidecar_path.file?
+    if UPSTREAM_PLUGIN.directory?
+      # A skill with no upstream sidecar must be a recorded addition, and it
+      # must gate itself: additions bypass the sidecar-derived decoration.
+      assert(sync_manifest.fetch("additions").include?("skills/#{name}/SKILL.md"), "skill has no upstream sidecar and is not a recorded addition: #{name}")
+      assert(metadata.fetch("disable-model-invocation", false) == true, "addition skill must declare disable-model-invocation: true: #{name}")
+    end
+    next
+  end
 
   implicit = YAML.safe_load(sidecar_path.read, aliases: false).fetch("policy").fetch("allow_implicit_invocation")
   assert([true, false].include?(implicit), "allow_implicit_invocation must be a boolean: #{name}")
@@ -85,9 +93,13 @@ skill_paths.each do |path|
 end
 
 if UPSTREAM_PLUGIN.directory?
+  # The generated skill set is the upstream set plus every skill carried in
+  # from additions/; the sync manifest is the single source for the latter.
   upstream_skills = Pathname.glob(UPSTREAM_PLUGIN.join("skills/*/SKILL.md")).map { |p| p.dirname.basename.to_s }.sort
+  addition_skills = sync_manifest.fetch("additions").map { |p| p[%r{\Askills/([^/]+)/SKILL\.md\z}, 1] }.compact
+  expected = (upstream_skills + addition_skills).sort
   generated = skill_paths.map { |p| p.dirname.basename.to_s }.sort
-  assert(generated == upstream_skills, "generated skills do not match upstream: #{(generated - upstream_skills) | (upstream_skills - generated)}")
+  assert(generated == expected, "generated skills do not match upstream plus additions: #{(generated - expected) | (expected - generated)}")
 end
 
 # --- host-neutral generated text -------------------------------------------

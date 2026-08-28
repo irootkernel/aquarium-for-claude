@@ -13,7 +13,9 @@
     "assets/hero.png"
   ],
   "additions": [
-    "agents/independent-reviewer.md"
+    "agents/independent-reviewer.md",
+    "skills/upgrade/SKILL.md",
+    "skills/upgrade/references/rederivation.md"
   ],
   "argument_hints": {
     "dev-setup-bundle": "<manifest-path>",
@@ -94,6 +96,8 @@
     "skills/test-setup/references/contract.md": "b1f20dfd5ea472491c29b547b85734fa513295010291cc4ba83edc7898215590",
     "skills/test-setup/references/profiles.md": "65b932c09f6d512efe42d5d0043f1a3348dfbbf5b7fa6d7cac31bfaf57ee5e29",
     "skills/test-setup/scripts/inspect_testing.py": "2b53765c445661518b4e917cf21ec5bd2c6906497cf12f2bd449a41b49bc0605",
+    "skills/upgrade/SKILL.md": "76ba7e7d96c9d692588b5f16f0ff3daf09d694793e2f5eac19b06a6ce2088d06",
+    "skills/upgrade/references/rederivation.md": "1b7b6462d214140cf84ebd10293583b8cb6a3b8fa9879f61e94e02a381703026",
     "skills/war-room/SKILL.md": "3573932f58819f14e706570ba748af67861b1ba24d50d5cc5cc7a299254c19ea"
   }
 }

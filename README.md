@@ -56,6 +56,7 @@ Repositories that used the Podway integration must finish or explicitly dispose 
 | `docs-setup` | Audit, establish, adopt, or migrate the repository's canonical documentation structure and roadmap IDs. | `/aquarium:docs-setup` |
 | `independent-review` | Run the canonical static review contract with fresh read-only reviewer subagents, then adjudicate their findings. | `/aquarium:independent-review` with a staged, commit, range, task, epic, or special-request target |
 | `orca-review` | Run the same review contract through a user-selected Claude Fable, Kimi, Agy, or Cursor Agent in Orca, then adjudicate locally. | `/aquarium:orca-review` with a staged, commit, range, task, epic, or special-request target |
+| `upgrade` | Adopt a newly released upstream Aquarium version in this generator repository through orchestrated subagents, then publish the reviewed tag and GitHub Release. | `/aquarium:upgrade` with an optional released upstream version |
 
 The four design skills drive Ouroboros as a bounded leaf capability and need it installed and pinned to `>=0.51.1,<0.52.0`; `/aquarium:dev-setup` diagnoses and configures it behind separate approvals. They shape documents only and never implement.
 
@@ -71,11 +72,15 @@ The plugin ships a `PreToolUse` hook that inspects `Bash` commands and denies a 
 
 The plugin ships one subagent, `aquarium:independent-reviewer`, from `additions/agents/`. It has no upstream counterpart: Codex has no plugin subagents, so upstream's review skill leans on Orca, and the Claude override leaned on prose asking for "a subagent type without editing tools". The bundled agent turns the two requirements that matter into configuration — a tool allowlist of `Read`, `Grep`, `Glob`, and `Bash` with no editing tool, and `model: opus` — and carries a review-focused system prompt derived from the skill's reviewer requirements. Bash stays in the allowlist because a reviewer must read `git diff --cached` and `git show`; its read-only discipline is plan mode plus the prompt, which is stated rather than hidden. The prompt also carries the one boundary an in-session reviewer cannot inherit from its tools: a subagent runs as the same operating-system user in the same worktree, so reading the target through Git objects rather than working-tree copies, and leaving the excluded dirty remainder unopened, is a rule rather than a sandbox. The cost is that the agent's description is loaded into every session where the plugin is enabled, which is why it is worded narrowly and negatively; the skill falls back to any editing-free subagent type when the bundled one is absent.
 
+### Edition upgrade skill
+
+The plugin ships one edition-owned skill, `upgrade`, from `additions/skills/`. It has no upstream counterpart because it operates this generator repository itself: it pins the submodule to a released upstream tag, resolves every sync abort through orchestrated Opus and Sonnet subagents while the invoking conversation decides, reviews, and validates, and publishes the reviewed tag, GitHub Release, and local installation refresh behind explicit approvals. It refuses to run outside this repository, and its `references/rederivation.md` records the override re-derivation method and the adoption traps that are invisible in the code. Like every addition it is authored in final form: the gating flag is self-declared, generation refuses a skill addition without it, and `tests/validate.rb` asserts that a sidecar-less skill is a recorded addition and gated.
+
 ### Invocation gating
 
-Every skill except `task-commit` carries `disable-model-invocation: true`, so Claude cannot start it on its own; you invoke it with `/aquarium:<skill>`. Several of these skills stage, commit, or mutate roadmap state, and the upstream workflow requires explicit invocation. The flag is derived from each upstream skill's `agents/openai.yaml` at sync time, so it can never disagree with the Codex policy.
+Every skill except `task-commit` carries `disable-model-invocation: true`, so Claude cannot start it on its own; you invoke it with `/aquarium:<skill>`. Several of these skills stage, commit, or mutate roadmap state, and the upstream workflow requires explicit invocation. The flag is derived from each upstream skill's `agents/openai.yaml` at sync time, so it can never disagree with the Codex policy; the edition-owned `upgrade` skill has no sidecar, so it declares the flag itself and both generation and validation assert it.
 
-The skills that take arguments also carry an `argument-hint`, which Claude Code shows after the command name in the `/` menu — `/aquarium:epic-handler <roadmap-path> <epic-id>`, for example. The Codex sidecar has no counterpart, so the hints come from one table in `scripts/sync.py`, recorded in the sync manifest and asserted against every skill's frontmatter; a skill that upstream drops stops the sync rather than leaving a stale hint.
+The skills that take arguments also carry an `argument-hint`, which Claude Code shows after the command name in the `/` menu — `/aquarium:epic-handler <roadmap-path> <epic-id>`, for example. The Codex sidecar has no counterpart, so the hints come from one table in `scripts/sync.py`, recorded in the sync manifest and asserted against every upstream skill's frontmatter; a skill that upstream drops stops the sync rather than leaving a stale hint, and the edition-owned `upgrade` skill carries its hint inline because that table deliberately rejects names upstream does not ship.
 
 This is also why the plugin is a separate artifact rather than a second manifest in the upstream repository: Codex's plugin validator rejects `disable-model-invocation` outright, while Claude Code needs it for the same guarantee.
 
@@ -89,7 +94,8 @@ overrides/
   codex-exemptions.json          path → SHA-256 of an upstream file whose remaining "Codex" mentions were reviewed
   skills/...                     full-file replacements for host-specific divergence
 additions/
-  agents/...                     host-only files with no upstream counterpart
+  agents/...                     host-only plugin subagents with no upstream counterpart
+  skills/...                     edition-owned skills, carried into the generated plugin
 scripts/sync.py                  the transformation
 plugins/aquarium/                generated output, committed
   agents/                        the bundled reviewer subagent
@@ -97,7 +103,7 @@ plugins/aquarium/                generated output, committed
   sync-manifest.json             upstream commit, overrides, exclusions, and per-file hashes
 ```
 
-`sync.py` copies the upstream plugin, drops the files excluded by name, applies literal substitutions, applies overrides, derives invocation gating from the upstream sidecars and drops them, then adds the host-only files. It refuses to run against an empty submodule, refuses to run when upstream grows a directory the transformation does not handle, fails if host-specific text survives, fails if a substitution rule matched nothing that ships, and fails if a generated script cannot run.
+`sync.py` copies the upstream plugin, drops the files excluded by name, applies literal substitutions, applies overrides, derives invocation gating from the upstream sidecars and drops them, then adds the host-only files — the bundled reviewer subagent and the edition-owned `upgrade` skill, which must declare its own gating or generation refuses it. It refuses to run against an empty submodule, refuses to run when upstream grows a directory the transformation does not handle, fails if host-specific text survives, fails if a substitution rule matched nothing that ships, and fails if a generated script cannot run.
 
 Four files diverge semantically and are kept as overrides rather than substitutions:
 
@@ -140,6 +146,8 @@ git add -A && git commit
 ```
 
 Each override records the SHA-256 of the upstream file it came from. When upstream changes one of those files the sync stops and names it, because merging a stale override would ship guidance that no longer matches its source. Re-derive the override against the new upstream content and update `overrides/manifest.json`.
+
+`/aquarium:upgrade` walks this sequence end to end — subagent-gathered delta analysis, approved re-derivations, validation, release, and the local installation refresh — behind explicit approvals at every mutating boundary.
 
 ## Validate
 

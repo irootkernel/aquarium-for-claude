@@ -51,6 +51,12 @@ ADDED_PATHS: tuple[str, ...] = (
     # A plugin subagent Claude Code discovers from the plugin-root `agents/`
     # directory: the read-only Opus reviewer `independent-review` dispatches.
     "agents/independent-reviewer.md",
+    # The edition-owned upgrade lifecycle. Additions land after
+    # `transform_skills`, so this skill never sees the sidecar-derived
+    # decoration: its frontmatter — the gating flag included — is authored
+    # final, and `apply_additions` refuses a skill addition that omits it.
+    "skills/upgrade/SKILL.md",
+    "skills/upgrade/references/rederivation.md",
 )
 
 # Slash-menu hints for the skills that take arguments. Claude Code shows the
@@ -1503,6 +1509,20 @@ def apply_additions(destination: Path) -> list[str]:
             raise SyncError(
                 f"addition `{relative}` collides with an upstream-derived file; "
                 "use an override for a file upstream ships"
+            )
+        segments = relative.split("/")
+        if (
+            len(segments) == 3
+            and segments[0] == "skills"
+            and segments[2] == "SKILL.md"
+            and "disable-model-invocation: true"
+            not in source.read_text(encoding="utf-8")
+        ):
+            # An addition skill bypasses the sidecar-derived gating, so a
+            # missing flag would ship a model-invocable mutating skill.
+            raise SyncError(
+                f"addition skill `{relative}` must declare "
+                "disable-model-invocation: true in its own frontmatter"
             )
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)

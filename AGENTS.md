@@ -52,9 +52,10 @@ Aquarium for Claude is a generated Claude Code plugin marketplace, and this file
 
 - Purpose: a Claude Code plugin marketplace generated from the Codex plugin pinned as the `upstream/` submodule; the generated tree under `plugins/aquarium/` is committed so installation never depends on the submodule.
 - `scripts/sync.py` is the transformation and the authority on every difference between upstream and the artifact: substitution rules, excluded files, added files, required text, and forbidden text.
-- `overrides/manifest.json` and `overrides/codex-exemptions.json` pin the upstream digests each override and exemption was judged against; `overrides/skills/**` hold the full-file replacements and `additions/agents/**` the host-only files.
+- `overrides/manifest.json` and `overrides/codex-exemptions.json` pin the upstream digests each override and exemption was judged against; `overrides/skills/**` hold the full-file replacements and `additions/**` the host-only files — plugin subagents under `agents/` and edition-owned skills under `skills/`.
 - `tests/validate.rb` asserts the artifact's invariants, `tests/test_claude_mcp_inspection.py` covers the Claude Code MCP inspection the sync injects, and `.github/workflows/validate.yml` runs both after `python3 scripts/sync.py --check`.
 - `README.md` is the public explanation of the generation model and must stay aligned with `scripts/sync.py`.
+- `CHANGELOG.md` records this edition's shipped outcomes and the open development target that `/aquarium:upgrade` dates and reopens at release time.
 - Canonical commands: `python3 scripts/sync.py`, `python3 scripts/sync.py --check`, `ruby tests/validate.rb`, `python3 -m unittest tests/test_claude_mcp_inspection.py`, `git diff --check`, and `claude plugin validate --strict plugins/aquarium`.
 
 ### Commit Messages
