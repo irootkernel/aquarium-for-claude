@@ -157,7 +157,7 @@ assert(!SIGIL.match?("${CLAUDE_PLUGIN_ROOT}"), "the sigil regex must ignore shel
 # Each exception exists only because the regex still spells it. One that stopped
 # matching would be dead weight hiding behind a guard it no longer needs.
 SIGIL_LITERALS.each do |literal|
-  assert(SIGIL.match?(literal), "sigil exception `#{literal}` is not something the regex matches")
+  assert(literal[SIGIL] == literal, "sigil exception `#{literal}` is not a whole token the scan would emit")
 end
 
 # `FORBIDDEN` and `SIGIL_LITERALS` in scripts/sync.py and their counterparts
@@ -238,7 +238,12 @@ if inspection.file?
   # The writing skills must be diagnosed against a root this host can reach;
   # upstream expects them in the shared cross-agent root and the Codex home.
   assert(!script.include?('".agents/skills/humanizer"'), "inspection must not expect Humanizer in another host's skill root")
-  assert(script.scan('expected_target=skill_roots()[0]').length == 2, "both writing skills must be expected in the Claude Code skill root")
+  # Counting the two known calls would let a third writing skill upstream adds
+  # ship against an unreachable root, so the totals must agree instead.
+  assert(
+    script.scan('expected_target=').length == script.scan('expected_target=skill_roots()[0]').length,
+    "every writing skill must be expected in the Claude Code skill root"
+  )
   # Upstream's Codex-based probe helpers stay defined but must have no callers:
   # each name may appear exactly once, at its `def`.
   %w[mcp_registration_probe classify_mulgae_mcp_scope classify_gaori_mcp_scope effective_mcp_registration

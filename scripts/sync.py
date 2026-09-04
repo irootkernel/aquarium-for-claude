@@ -198,13 +198,15 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ("Codex skill health", "Claude Code skill health"),
     ("Codex and runtime components", "host integration and runtime components"),
     # release-qa's dispatch instructions are host-neutral because Codex has no
-    # first-class subagents. This host does: the Task tool is the delegation
-    # surface, and independent subagents launched in a single message is what
-    # parallel dispatch concretely means here. Naming both follows upstream's
-    # own charter of making supported native capabilities readily usable.
+    # first-class subagents. This host does, and independent subagents launched
+    # in a single message is what parallel dispatch concretely means here.
+    # Naming the mechanism follows upstream's own charter of making supported
+    # native capabilities readily usable; the tool's own name is deliberately
+    # not spelled, because Claude Code has already renamed it once and a stale
+    # name would send the model looking for a tool it does not have.
     (
         "Use the available agent delegation surface to dispatch fresh subagents for independent risk clusters.",
-        "Use the Task tool to dispatch fresh subagents for independent risk clusters.",
+        "Use the host's own subagent mechanism to dispatch fresh subagents for independent risk clusters.",
     ),
     (
         "Parallelize independent clusters when capacity allows without weakening isolation.",
@@ -1271,21 +1273,24 @@ def check_excluded_files() -> None:
 
 
 def check_sigil_literals() -> None:
-    """Refuse a sigil exception whose token no longer occurs in upstream Markdown.
+    """Refuse a sigil exception whose token no longer occurs in any source Markdown.
 
     The exception exists to stop one shell variable tripping the sigil scan. Once
-    upstream stops writing it, keeping the entry would blind the scan to a future
-    skill sigil that happens to have the same name.
+    nothing writes that token, keeping the entry would blind the scan to a future
+    skill sigil that happens to have the same name. Additions are read as well as
+    upstream, because `check_sigils` scans them too and an edition-owned file may
+    be the only thing that needs an exception.
     """
-    upstream_markdown = "".join(
+    source_markdown = "".join(
         path.read_text(encoding="utf-8")
-        for path in sorted(UPSTREAM_PLUGIN.rglob("*.md"))
+        for root in (UPSTREAM_PLUGIN, ADDITIONS)
+        for path in sorted(root.rglob("*.md"))
         if path.is_file()
     )
-    dead = [literal for literal in SIGIL_LITERALS if literal not in upstream_markdown]
+    dead = [literal for literal in SIGIL_LITERALS if literal not in source_markdown]
     if dead:
         raise SyncError(
-            "sigil exceptions no longer occur upstream: "
+            "sigil exceptions no longer occur in upstream or addition Markdown: "
             + ", ".join(dead)
             + "; remove each dead exception so it cannot mask a future sigil"
         )

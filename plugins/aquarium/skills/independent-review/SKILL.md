@@ -22,7 +22,13 @@ Resolve one canonical Git root, one exact `staged`, `head`, `commit`, or `range`
 
 Inspect and report branch, HEAD, upstream, staged, unstaged, untracked, ignored, and conflicted state without mutation. Never stage, edit, clean, stash, checkout, or otherwise normalize content. A conflict or unsafe candidate stops the review. Bind the exact authority paths and the user's test-status statement as context only.
 
-Run the target inspector after the scope and revision are settled, and bind its complete JSON result to every reviewer specification. Its JSON proves Git structure and digests only; it does not establish task ownership, requirement coverage, or runtime behavior.
+Run the target inspector after the scope and revision are settled:
+
+```text
+python3 <skill-directory>/scripts/inspect_review_target.py --repository <exact-git-root> (--staged | --head | --commit <revision> | --range <A..B|A...B>)
+```
+
+Bind its complete JSON result to every reviewer specification. Its JSON proves Git structure and digests only; it does not establish task ownership, requirement coverage, or runtime behavior, and for a merge commit its digest covers the diff against every parent rather than the first-parent transition the contract names.
 
 Immediately before dispatch, run `scripts/inspect_repository_state.py` from this skill directory with `--repository <exact-git-root> --snapshot`. Bind its complete JSON result as the coordinator-owned no-mutation baseline; a helper that is missing or fails is a reported gap, not a reason to improvise a substitute snapshot.
 
