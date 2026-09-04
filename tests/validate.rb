@@ -108,6 +108,13 @@ FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$create-", "$lore-", "$orca-cli", "req
                   "--agent codex", "~/.agents/skills", "${PLUGIN_ROOT}", ".codex/config",
                   "Codex"].freeze
 
+# Lowercase `$name` tokens that are shell variables rather than skill sigils, so
+# the scan below subtracts them. v0.1.14 pinned the commit identity through
+# `git -c user.name="$aquarium_commit_name"`, which the scan read as an unmapped
+# sigil; `sync.py` keeps the same list and requires each one to still occur
+# upstream.
+SIGIL_LITERALS = ["$aquarium_commit_name", "$aquarium_commit_email"].freeze
+
 # Some upstream text names the Codex CLI as a third-party tool rather than as the
 # host — a Mulgae provider, a required CLI version — and stays correct here. Each
 # exemption is gated on the upstream bytes a human reviewed, so `sync.py` stops
@@ -135,7 +142,7 @@ end
 SIGIL = /\$[a-z][a-z0-9:_-]*/.freeze
 
 Pathname.glob(PLUGIN.join("**/*.md")).sort.each do |path|
-  found = path.read.scan(SIGIL).uniq.sort
+  found = (path.read.scan(SIGIL).uniq - SIGIL_LITERALS).sort
   assert(
     found.empty?,
     "generated text contains Codex skill sigils #{found.join(', ')}: " \
@@ -147,40 +154,62 @@ end
 # Claude Code user, and nothing else asserts that it still works.
 assert(SIGIL.match?("$newthing"), "the sigil regex no longer matches a Codex skill sigil")
 assert(!SIGIL.match?("${CLAUDE_PLUGIN_ROOT}"), "the sigil regex must ignore shell variables")
+# Each exception exists only because the regex still spells it. One that stopped
+# matching would be dead weight hiding behind a guard it no longer needs.
+SIGIL_LITERALS.each do |literal|
+  assert(SIGIL.match?(literal), "sigil exception `#{literal}` is not something the regex matches")
+end
 
-# `FORBIDDEN` in scripts/sync.py and `FORBIDDEN_TEXT` here are maintained by
-# hand; a needle added to one and not the other halves the guard. Comparing the
-# two as sets closes both directions: a Ruby-only needle would let generation
-# write text CI then rejects, and a Python-only needle would leave the artifact
-# unguarded whenever the generated tree is checked without regenerating it.
-# `~/.agents/skills` was Python-only until this check existed.
+# `FORBIDDEN` and `SIGIL_LITERALS` in scripts/sync.py and their counterparts
+# here are maintained by hand; an entry added to one and not the other halves
+# the guard. Comparing them as sets closes both directions: a Ruby-only needle
+# would let generation write text CI then rejects, and a Python-only needle
+# would leave the artifact unguarded whenever the generated tree is checked
+# without regenerating it. `~/.agents/skills` was Python-only until this check
+# existed. A Ruby-only sigil exception would hide a real sigil from CI, and a
+# Python-only one would let generation ship text this file then rejects.
 #
-# The needles are read by parsing scripts/sync.py rather than executing it, and
+# The tables are read by parsing scripts/sync.py rather than executing it, and
 # through a real Python parser rather than a regex, so a literal carrying a
 # quote or a backslash cannot silently drop out of the comparison.
-EXTRACT_FORBIDDEN = <<~PYTHON
+EXTRACT_TABLES = <<~PYTHON
   import ast, json, pathlib
 
   tree = ast.parse(pathlib.Path("scripts/sync.py").read_text())
+  wanted = {"FORBIDDEN", "SIGIL_LITERALS"}
+  found = {}
   for node in tree.body:
       target = getattr(node, "target", None)
-      if getattr(target, "id", None) == "FORBIDDEN":
-          print(json.dumps([pair.elts[0].value for pair in node.value.elts]))
-          break
-  else:
-      raise SystemExit("FORBIDDEN not found in scripts/sync.py")
+      name = getattr(target, "id", None)
+      if name in wanted:
+          found[name] = [
+              element.elts[0].value if isinstance(element, ast.Tuple) else element.value
+              for element in node.value.elts
+          ]
+  missing = sorted(wanted - set(found))
+  if missing:
+      raise SystemExit("not found in scripts/sync.py: " + ", ".join(missing))
+  print(json.dumps(found))
 PYTHON
 
-sync_needles = begin
-  raw = IO.popen(["python3", "-c", EXTRACT_FORBIDDEN], chdir: ROOT.to_s, &:read)
-  assert($?.success?, "could not read FORBIDDEN from scripts/sync.py")
-  JSON.parse(raw).to_set
+sync_tables = begin
+  raw = IO.popen(["python3", "-c", EXTRACT_TABLES], chdir: ROOT.to_s, &:read)
+  assert($?.success?, "could not read the text guards from scripts/sync.py")
+  JSON.parse(raw)
 end
 
 assert(
-  sync_needles == FORBIDDEN_TEXT.to_set,
-  "forbidden needles disagree: only in scripts/sync.py #{(sync_needles - FORBIDDEN_TEXT.to_set).to_a.inspect}, " \
-  "only in tests/validate.rb #{(FORBIDDEN_TEXT.to_set - sync_needles).to_a.inspect}"
+  sync_tables.fetch("FORBIDDEN").to_set == FORBIDDEN_TEXT.to_set,
+  "forbidden needles disagree: only in scripts/sync.py " \
+  "#{(sync_tables.fetch('FORBIDDEN').to_set - FORBIDDEN_TEXT.to_set).to_a.inspect}, " \
+  "only in tests/validate.rb #{(FORBIDDEN_TEXT.to_set - sync_tables.fetch('FORBIDDEN').to_set).to_a.inspect}"
+)
+
+assert(
+  sync_tables.fetch("SIGIL_LITERALS").to_set == SIGIL_LITERALS.to_set,
+  "sigil exceptions disagree: only in scripts/sync.py " \
+  "#{(sync_tables.fetch('SIGIL_LITERALS').to_set - SIGIL_LITERALS.to_set).to_a.inspect}, " \
+  "only in tests/validate.rb #{(SIGIL_LITERALS.to_set - sync_tables.fetch('SIGIL_LITERALS').to_set).to_a.inspect}"
 )
 
 assert(
@@ -206,10 +235,14 @@ if inspection.file?
   # probed through another host's CLI and never by starting the server.
   assert(script.include?("def inspect_claude_mcp("), "inspection must read Mulgae and Gaori MCP registrations from Claude Code configuration")
   assert(script.include?('".mcp.json"'), "inspection must read the project MCP registration file")
+  # The writing skills must be diagnosed against a root this host can reach;
+  # upstream expects them in the shared cross-agent root and the Codex home.
+  assert(!script.include?('".agents/skills/humanizer"'), "inspection must not expect Humanizer in another host's skill root")
+  assert(script.scan('expected_target=skill_roots()[0]').length == 2, "both writing skills must be expected in the Claude Code skill root")
   # Upstream's Codex-based probe helpers stay defined but must have no callers:
   # each name may appear exactly once, at its `def`.
   %w[mcp_registration_probe classify_mulgae_mcp_scope classify_gaori_mcp_scope effective_mcp_registration
-     ouroboros_direct_launcher_matches ouroboros_isolated_launcher_matches].each do |helper|
+     ouroboros_direct_launcher_matches ouroboros_isolated_launcher_matches effective_codex_skill_root].each do |helper|
     assert(script.scan("#{helper}(").length == 1, "inspection must not call the Codex-based #{helper}")
   end
   assert(!script.include?('"mcp", "get", "mulgae"') && !script.include?('"mcp", "get", "gaori"'), "inspection must not health-check Mulgae or Gaori through claude mcp get")
@@ -289,6 +322,13 @@ end
 # exists upstream, or the exclusion has silently stopped applying.
 excluded = sync_manifest.fetch("excluded")
 assert(excluded.include?("assets/hero.png"), "the upstream README banner must stay excluded")
+# Upstream's independent review routes through a Dolgorae capture that runs a
+# Codex Reviewer; this artifact dispatches host subagents and its Orca review is
+# forbidden to use Dolgorae, so no skill here consumes that consumer contract.
+assert(
+  excluded.include?("references/dolgorae-review-contract.md"),
+  "the Dolgorae consumer contract must stay excluded while no skill routes through it"
+)
 generated_text = Pathname.glob(PLUGIN.join("**/*.{md,json,py,yaml}")).sort.reject { |p| p.basename.to_s == "sync-manifest.json" }
 excluded.each do |relative|
   assert(!PLUGIN.join(relative).exist?, "excluded file was generated: #{relative}")
@@ -357,6 +397,22 @@ additions.each do |relative|
   assert(ROOT.join("additions", relative).file?, "recorded addition has no source under additions/: #{relative}")
 end
 
+# The repository-state inspector is this edition's no-mutation baseline for
+# independent review. Upstream shipped it beside `orca-review` and removed it in
+# v0.1.14, so the edition owns it — under the skill that calls it, which is also
+# what retired the cross-skill path nothing in the sync watched.
+INSPECTOR = "skills/independent-review/scripts/inspect_repository_state.py"
+assert(additions.include?(INSPECTOR), "the repository-state inspector must be a recorded addition")
+independent_review = PLUGIN.join("skills/independent-review/SKILL.md").read
+assert(
+  independent_review.include?("scripts/inspect_repository_state.py"),
+  "independent review must still run the repository-state inspector"
+)
+assert(
+  !independent_review.include?("../orca-review/"),
+  "independent review must not reach across skill directories for the inspector"
+)
+
 AGENT_MODELS = %w[inherit opus sonnet haiku].freeze
 EDITING_TOOLS = %w[Edit Write NotebookEdit].freeze
 
@@ -396,7 +452,9 @@ end
 # The README's override table is the public explanation of every file that
 # diverges from upstream; it must name exactly the overrides the sync applied.
 readme = ROOT.join("README.md").read
-override_rows = readme.scan(/^\| `(skills\/[^`]+)` \| /).flatten.sort
+# The path prefixes are the generated tree's own top-level directories, so a
+# skills-table row (a bare skill name, no slash) can never be mistaken for one.
+override_rows = readme.scan(%r{^\| `((?:skills|references|agents|hooks|assets)/[^`]+)` \| }).flatten.sort
 assert(
   override_rows == sync_manifest.fetch("overrides").sort,
   "README override table #{override_rows.inspect} does not match the applied overrides #{sync_manifest.fetch('overrides').inspect}"

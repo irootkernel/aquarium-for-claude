@@ -12,12 +12,14 @@ How this edition re-derives overrides, exemptions, and script rules when the ups
 
 ## Known Traps
 
-- `references/orca-supervision.md` must never become an override: it holds the only shipped match of the orca-cli sigil rule, and shadowing it drives that rule to zero matches and stops generation.
+- `references/orca-supervision.md` was the only shipped match of the orca-cli sigil rule until v0.1.14 gave that rule a second match in `orca-review/SKILL.md`. Recount before assuming an override there is safe; a rule whose last shipped match moves inside an override target dies silently at the next adoption.
 - The create-prefixed sigil rule counts exactly one shipped match because its occurrence in `agents-guidance.md` is override-shadowed; overriding `references/podway-integration.md` would drive it to zero, the same class of trap.
 - The task-close closeout rule stays ordered before the generic input-tool substitution because its anchor contains the generic needle, and the generic rule survives on a single `docs-setup` match.
 - Upstream's launcher-matcher helpers ship defined but uncalled, pinned by the validator's no-caller list; recheck the pins on every adoption.
-- The `independent-review` override references the repository-state inspector inside the `orca-review` skill across skill directories, and nothing in the sync watches that path; confirm it still resolves after every adoption.
+- The `independent-review` override reached across skill directories for the repository-state inspector until upstream deleted it in v0.1.14. The edition now owns that inspector as an addition under `independent-review` itself, and `tests/validate.rb` asserts both that it ships and that the skill no longer names the old cross-skill path.
 - The TodoWrite naming rule is this edition's to retire if the harness renames the tool; its upstream anchor keeps matching either way, so no abort will surface it.
+- The sigil scan assumes every lowercase dollar-prefixed name in Markdown is a skill invocation, which v0.1.14 broke with the shell variables in `task-commit`'s `git -c` snippet. Name each new false positive in `SIGIL_LITERALS` rather than narrowing the pattern, and mirror it into `tests/validate.rb`, which compares the two lists as sets. The scan covers additions too, so an unlisted sigil-shaped token written into this file or any other addition stops generation just as an upstream one would.
+- Invocation gating is upstream's decision, not a fixed set: v0.1.14 opened `orca-review` to implicit invocation. Read the model-invocable set from the sidecars on every adoption instead of asserting a remembered one.
 - The generated-script gate parses and checks call arity only, so block rules must swallow every downstream reader of the locals they delete; the MCP-inspection unit tests are the only executable coverage.
 - The bundled reviewer subagent has no digest gate against the review contract it serves; re-read them together when upstream changes that contract.
 - `README.ko.md` has no automated agreement check with `README.md`; mirror every change by hand and re-read both.

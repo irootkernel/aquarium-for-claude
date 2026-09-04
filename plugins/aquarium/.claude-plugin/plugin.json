@@ -1,7 +1,7 @@
 {
   "name": "aquarium",
   "displayName": "Aquarium",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "AI Fleet engineering workflows for governed design, documentation, delivery, review, validation, testing, and release lifecycle management.",
   "author": {
     "name": "Root Kernel",
@@ -28,6 +28,9 @@
     "qa",
     "review",
     "deslop",
+    "humanizer",
+    "writing",
+    "korean",
     "lora",
     "lore",
     "sanho",

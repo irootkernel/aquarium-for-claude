@@ -57,6 +57,11 @@ ADDED_PATHS: tuple[str, ...] = (
     # final, and `apply_additions` refuses a skill addition that omits it.
     "skills/upgrade/SKILL.md",
     "skills/upgrade/references/rederivation.md",
+    # The repository-state inspector this edition's independent review runs for
+    # its no-mutation baseline. Upstream shipped it beside `orca-review` and
+    # removed it in v0.1.14; the edition owns it now, under the skill that
+    # actually calls it, which also retires the cross-skill path nothing watched.
+    "skills/independent-review/scripts/inspect_repository_state.py",
 )
 
 # Slash-menu hints for the skills that take arguments. Claude Code shows the
@@ -94,6 +99,14 @@ EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
         "manifest icon and logo fields in v0.1.10, so nothing in the plugin or in "
         "Claude Code's plugin UI can reference it",
     ),
+    (
+        "references/dolgorae-review-contract.md",
+        "the consumer contract for the Dolgorae capture backend upstream adopted in "
+        "v0.1.14; that backend runs a fresh Codex Reviewer, this artifact's "
+        "independent review dispatches host subagents instead, and its Orca review "
+        "is forbidden to use Dolgorae, so no skill here routes through it and the "
+        "contract would document a lifecycle this edition does not have",
+    ),
 )
 
 # Ordered literal substitutions applied to copied Markdown. Order matters: a
@@ -112,26 +125,31 @@ EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
 # corrupt into "nested CLAUDE.md, CLAUDE.md". Instruction-file wording is
 # handled by full-file overrides instead.
 SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
-    # Upstream's Orca supervision reference is one document serving two skills.
-    # Its `$aquarium:orca-review` clause is correct here — that skill still
-    # drives Orca — but its `$aquarium:independent-review` clause is not: this
-    # artifact's independent review dispatches host subagents and never starts
-    # an Orca worker, and that one sentence carries both the `Codex` and the
-    # `--agent codex` needle. Deleting exactly it leaves the backend contract
-    # true for the skill that still uses it. The anchor holds an unsubstituted
-    # sigil, so this rule must run before the `$aquarium:` rule.
-    #
-    # The file is deliberately not an override: at v0.1.11 its line 5 is the
-    # only `$orca-cli` that ships, so shadowing the file would drive that rule
-    # to zero matches and force its deletion — retiring a sigil guard for one
-    # clause.
+    # Upstream sends a caller who needs `workspace` or `dirty` to independent
+    # review, which is true there because its independent review has Dolgorae's
+    # immutable capture. Here neither backend has one, so both scopes are
+    # unsupported on both paths and the referral is a circle. Deleting exactly
+    # the referral leaves the exclusion itself, which is correct. The anchor
+    # holds an unsubstituted sigil, so this rule must run before the
+    # `$aquarium:` rule.
     (
-        "Create one Run and Task. For `$aquarium:independent-review`, start one fresh "
-        "Codex with the live guide's supervised `worker-start --worktree current "
-        "--agent codex` path. Do not reuse a terminal or create another Git worktree.",
-        "Create one Run and Task. Do not reuse a terminal or create another Git worktree.",
+        "`workspace` and `dirty` remain outside this workflow. Use "
+        "`$aquarium:independent-review` when one of those scopes is required. "
+        "Never stage paths merely to manufacture an Orca Review target.",
+        "`workspace` and `dirty` remain outside this workflow. "
+        "Never stage paths merely to manufacture an Orca Review target.",
     ),
     ("$aquarium:", "/aquarium:"),
+    # The shared disposition contract describes re-review after remediation in
+    # terms of each backend's target acquisition. This artifact's independent
+    # review captures nothing — it dispatches subagents that read the live
+    # target, exactly as Orca's reviewer does — so upstream's grouping is false
+    # here and would have a coordinator look for capture evidence that never
+    # exists.
+    (
+        "Independent Review and Mulgae create fresh native captures. Orca reads the corrected live target.",
+        "Mulgae creates a fresh native capture. Independent Review and Orca read the corrected live target.",
+    ),
     # `$use-podway`, `$use-sanho`, `$use-mulgae`, `$use-gaori`. A prefix rule
     # covers the family and any later sibling; `/use-` cannot re-match it.
     ("$use-", "/use-"),
@@ -179,13 +197,6 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # cannot break it again.
     ("Codex skill health", "Claude Code skill health"),
     ("Codex and runtime components", "host integration and runtime components"),
-    # `non-Codex` only means something against a canonical reviewer that is
-    # Codex. Here the canonical reviewer is a fresh Claude subagent, so the
-    # phrase is false by implication rather than merely host-specific, and an
-    # exemption would preserve it. One consonant-initial adjective keeps both
-    # occurrences grammatical and matches the vocabulary the README already uses
-    # for the providers `orca-review` selects.
-    ("non-Codex", "third-party"),
     # release-qa's dispatch instructions are host-neutral because Codex has no
     # first-class subagents. This host does: the Task tool is the delegation
     # surface, and independent subagents launched in a single message is what
@@ -542,6 +553,23 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "                registration_reason or \"registration_not_supported_launcher\"\n"
         "            ),\n"
         "        }\n",
+    ),
+    # Upstream installs Humanizer into the shared cross-agent root and im-not-ai
+    # into the active Codex home, and `inspect_writing_skill` marks a tool ready
+    # only when the one discovered installation sits at this exact target. The
+    # substituted `skill_roots()` searches the Claude Code roots alone, so both
+    # targets are unreachable by construction and every correct installation
+    # would report `degraded` against a path on another host — the same failure
+    # the Mulgae and Gaori probes had. `skill_roots()` is never empty, and its
+    # first entry is the effective root, `CLAUDE_CONFIG_DIR` included. This
+    # leaves `effective_codex_skill_root` defined without callers.
+    (
+        '        expected_target=Path.home() / ".agents/skills/humanizer",\n',
+        '        expected_target=skill_roots()[0] / "humanizer",\n',
+    ),
+    (
+        '        expected_target=effective_codex_skill_root() / "humanize-korean",\n',
+        '        expected_target=skill_roots()[0] / "humanize-korean",\n',
     ),
     # Upstream inspects the Mulgae and Gaori MCP registrations through the Codex
     # CLI: `codex mcp get --json` from a neutral cwd for the global view, the
@@ -1114,6 +1142,10 @@ REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
     ("skills/dev-setup/scripts/inspect_tools.py", '".mcp.json"'),
     ("skills/dev-setup/scripts/inspect_tools.py", "enabledMcpjsonServers"),
     ("skills/dev-setup/scripts/inspect_tools.py", "registration_pending_approval"),
+    # The writing-skill targets are single-line matches inside a call, so a
+    # reformat upstream would restore targets this host cannot reach.
+    ("skills/dev-setup/scripts/inspect_tools.py", 'expected_target=skill_roots()[0] / "humanizer"'),
+    ("skills/dev-setup/scripts/inspect_tools.py", 'expected_target=skill_roots()[0] / "humanize-korean"'),
     # The test-setup inspector is host-neutral and copied untouched; this pins
     # the schema it must keep announcing.
     ("skills/test-setup/scripts/inspect_testing.py", "aquarium-test-setup-inspection.v1"),
@@ -1137,14 +1169,28 @@ FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("Codex", "add a substitution rule, an override, or a reviewed exemption"),
 )
 
-# Every lowercase `$name` in upstream Markdown is a Codex skill invocation.
-# `FORBIDDEN` names one needle per sigil family that already exists, so a family
-# upstream introduces later passes both the substitution table and the forbidden
-# scan and ships Codex invocation syntax to a Claude Code user in silence. That
-# is how `$interview`, `$pm`, `$seed`, `$qa`, and `$deslop` arrived in v0.1.9.
-# Uppercase spellings are environment variables the generated tree still needs
-# (`${CLAUDE_PLUGIN_ROOT}`, `$CODEX_HOME`) and deliberately do not match.
+# Almost every lowercase `$name` in upstream Markdown is a Codex skill
+# invocation. `FORBIDDEN` names one needle per sigil family that already exists,
+# so a family upstream introduces later passes both the substitution table and
+# the forbidden scan and ships Codex invocation syntax to a Claude Code user in
+# silence. That is how `$interview`, `$pm`, `$seed`, `$qa`, and `$deslop`
+# arrived in v0.1.9. Uppercase spellings are environment variables the generated
+# tree still needs (`${CLAUDE_PLUGIN_ROOT}`, `$CODEX_HOME`) and deliberately do
+# not match.
 SIGIL = re.compile(r"\$[a-z][a-z0-9:_-]*")
+
+# The exceptions are lowercase `$name` tokens that are shell variables rather
+# than skill invocations: v0.1.14 pins the commit identity through `git -c
+# user.name="$aquarium_commit_name"`, which the scan read as an unmapped sigil.
+# Dropping `_` from the pattern would close this case and silently admit any
+# future `$snake_case` skill, so each exception is named instead, and
+# `check_sigil_literals` requires it to still occur upstream: a token that stops
+# shipping is removed deliberately rather than left masking the next sigil it
+# happens to spell.
+SIGIL_LITERALS: tuple[str, ...] = (
+    "$aquarium_commit_name",
+    "$aquarium_commit_email",
+)
 
 
 class SyncError(RuntimeError):
@@ -1222,6 +1268,27 @@ def check_excluded_files() -> None:
                 f"exclusion targets `{relative}`, which no longer exists upstream; "
                 "remove the exclusion or retarget it"
             )
+
+
+def check_sigil_literals() -> None:
+    """Refuse a sigil exception whose token no longer occurs in upstream Markdown.
+
+    The exception exists to stop one shell variable tripping the sigil scan. Once
+    upstream stops writing it, keeping the entry would blind the scan to a future
+    skill sigil that happens to have the same name.
+    """
+    upstream_markdown = "".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(UPSTREAM_PLUGIN.rglob("*.md"))
+        if path.is_file()
+    )
+    dead = [literal for literal in SIGIL_LITERALS if literal not in upstream_markdown]
+    if dead:
+        raise SyncError(
+            "sigil exceptions no longer occur upstream: "
+            + ", ".join(dead)
+            + "; remove each dead exception so it cannot mask a future sigil"
+        )
 
 
 def apply_substitutions(text: str) -> str:
@@ -1592,13 +1659,18 @@ def check_sigils(destination: Path) -> None:
 
     This closes the class rather than the known instances: an unmapped sigil is
     a silent failure, because it is valid Markdown that simply names a command
-    the reader's host does not have.
+    the reader's host does not have. `SIGIL_LITERALS` carries the named
+    exceptions, each one a shell variable the pattern cannot tell apart.
     """
     failures: list[str] = []
     for path in sorted(destination.rglob("*.md")):
         if not path.is_file():
             continue
-        found = sorted(set(SIGIL.findall(path.read_text(encoding="utf-8"))))
+        found = sorted(
+            token
+            for token in set(SIGIL.findall(path.read_text(encoding="utf-8")))
+            if token not in SIGIL_LITERALS
+        )
         if found:
             failures.append(f"  {path.relative_to(destination)}: {', '.join(found)}")
     if failures:
@@ -1724,6 +1796,7 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     commit = upstream_commit()
     codex_exemptions = check_codex_exemptions()
     check_excluded_files()
+    check_sigil_literals()
     copy_tree(destination)
     excluded = remove_excluded(destination)
     usage = transform_text(destination, set(load_override_manifest()))

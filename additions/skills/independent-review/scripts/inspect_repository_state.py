@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Snapshot and compare Git-observable repository state for Orca Review."""
+"""Snapshot and compare Git-observable repository state for Independent Review."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = "aquarium-orca-review-repository-state/v1"
-ERROR_SCHEMA_VERSION = "aquarium-orca-review-repository-state-error/v1"
+SCHEMA_VERSION = "aquarium-independent-review-repository-state/v1"
+ERROR_SCHEMA_VERSION = "aquarium-independent-review-repository-state-error/v1"
 MAX_BASELINE_BYTES = 1024 * 1024
 DIMENSIONS = (
     "head",
