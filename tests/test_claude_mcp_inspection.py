@@ -11,17 +11,31 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INSPECTOR = ROOT / "plugins/aquarium/skills/dev-setup/scripts/inspect_tools.py"
+GLOBAL_INSPECTOR = (
+    ROOT / "plugins/aquarium/skills/dev-setup-global/scripts/inspect_global_tools.py"
+)
 
 
 def load_inspector():
     specification = importlib.util.spec_from_file_location("inspect_tools", INSPECTOR)
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+def load_global_inspector():
+    specification = importlib.util.spec_from_file_location(
+        "inspect_global_tools", GLOBAL_INSPECTOR
+    )
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
@@ -196,6 +210,50 @@ class ClaudeMcpInspectionTest(unittest.TestCase):
         self.assertIn(".mcp.json", [entry["path"] for entry in tool["configuration"]])
         self.assertNotIn("codex_version", tool["mcp_registration"])
         self.assertIn("claude_version", tool["mcp_registration"])
+
+
+class GlobalInspectorTest(unittest.TestCase):
+    """The global inspector is surgery no other gate executes.
+
+    `check_generated_python` and `tests/validate.rb` only parse it, and its one
+    call into the project inspector crosses a module boundary the arity gate
+    cannot see. Importing it at all is the regression these tests exist for: the
+    excluded per-home Ouroboros module was a top-level import, so a re-derivation
+    that leaves it behind fails here rather than on a user's first run.
+    """
+
+    def setUp(self) -> None:
+        self.module = load_global_inspector()
+
+    def test_the_excluded_per_home_module_is_not_imported(self) -> None:
+        self.assertNotIn("inspect_ouroboros", sys.modules)
+        self.assertFalse(hasattr(self.module, "InvalidCodexHome"))
+
+    def test_component_set_matches_what_this_edition_ships(self) -> None:
+        self.assertIn("ouroboros", self.module.GLOBAL_COMPONENTS)
+        self.assertNotIn("aquarium-dev", self.module.GLOBAL_COMPONENTS)
+
+    def test_the_per_home_options_are_gone_from_the_parser(self) -> None:
+        for flag in ("--codex-home", "--verify-ouroboros-release"):
+            with self.subTest(flag=flag):
+                with mock.patch.object(sys, "argv", ["inspect_global_tools.py", flag, "x"]):
+                    with self.assertRaises(self.module.InspectionError):
+                        self.module.parse_arguments()
+
+    def test_the_global_mcp_view_comes_from_configuration(self) -> None:
+        """The user-scope view is the project inspector's read, not a CLI probe."""
+        calls = []
+
+        def fake(tool, repository, executable, timeout_seconds):
+            calls.append((tool, executable))
+            return {"global": {"status": "configured", "scope": "global"}}
+
+        inspector = types.SimpleNamespace(inspect_claude_mcp=fake)
+        result = self.module.inspect_global_mcp(
+            inspector, "mulgae", "/bin/mulgae", Path("/"), 5.0
+        )
+        self.assertEqual(result, {"status": "configured", "scope": "global"})
+        self.assertEqual(calls, [("mulgae", "/bin/mulgae")])
 
 
 class ClaudeSkillRootTest(unittest.TestCase):
