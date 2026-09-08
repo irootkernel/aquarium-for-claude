@@ -34,7 +34,7 @@ claude plugin marketplace add irootkernel/aquarium-for-claude
 claude plugin install aquarium@aquarium-for-claude
 ```
 
-Podway 통합을 쓰던 저장소는 이전하기 전에 활성 세션을 끝내거나 명시적으로 폐기해야 하며, 그 뒤 별도로 승인된 `/aquarium:dev-setup` 실행으로 관리 대상 `root-kernel-{task,goal,validation}-v2.yaml` 절차를 교체해야 합니다. 검사 스키마는 이제 `aquarium-dev-setup-inspection.v10`입니다.
+Podway 통합을 쓰던 저장소는 이전하기 전에 활성 세션을 끝내거나 명시적으로 폐기해야 하며, 그 뒤 별도로 승인된 `/aquarium:dev-setup` 실행으로 관리 대상 `root-kernel-{task,goal,validation}-v2.yaml` 절차를 교체해야 합니다.
 
 ## 스킬
 
@@ -50,16 +50,16 @@ Podway 통합을 쓰던 저장소는 이전하기 전에 활성 세션을 끝내
 | `task-commit` | 로드맵 task 생애주기 상태를 정합화하고 무관한 작업을 보존하는 승인된 커밋 하나를 만듭니다. | 커밋 요청 시 자동, 또는 `/aquarium:task-commit` |
 | `release-handler` | 안정 릴리스 생애주기 하나를 소유합니다. 누적 체인지로그를 정리하고, 릴리스 QA를 게이트하며, 별도 승인 뒤에 한 버전을 배포합니다. | `/aquarium:release-handler` 의도한 버전 또는 예정 버전 |
 | `release-qa` | 이전 안정 릴리스 이후의 모든 변경을 다루는 읽기 전용 사용자 시나리오로 현재 릴리스 후보를 검증합니다. | `/aquarium:release-qa` 의도했거나 확인된 버전 |
-| `dev-setup` | 선택한 개발 도구를 진단·구성하고, 별도 승인 뒤에 레퍼런스 기반 지시 파일 가이드를 제안합니다. | `/aquarium:dev-setup` |
+| `dev-setup` | 저장소 로컬 개발 도구를 진단·구성하고, 별도 승인 뒤에 레퍼런스 기반 지시 파일 가이드를 제안합니다. | `/aquarium:dev-setup` |
 | `dev-setup-bundle` | 외부 YAML 매니페스트 하나로 명시된 Git 저장소들에 개발 도구 설정을 적용합니다. | `/aquarium:dev-setup-bundle` 매니페스트 경로 |
-| `aquarium-dev` | 로컬 main 도구 산출물을 `~/.aquarium-dev` 아래에 격리 빌드하는 Aquarium 개발 채널을 진단·등록하고 노출합니다. | `/aquarium:aquarium-dev` |
+| `dev-setup-global` | 저장소 스킬들이 의존하는 사용자 전역 CLI, 짝 스킬, 서비스, MCP 등록을 진단·설치·갱신합니다. | `/aquarium:dev-setup-global` |
 | `test-setup` | 저장소 하나의 공통 Make 또는 Bun 테스트 계약을 감사·제안·구성하며, 증거 기반 레거시 면제를 포함합니다. | `/aquarium:test-setup` |
 | `docs-setup` | 저장소의 정규 문서 구조와 로드맵 ID를 감사·수립·채택·이전합니다. | `/aquarium:docs-setup` |
 | `independent-review` | 새 읽기 전용 리뷰어 서브에이전트로 정규 정적 리뷰 계약을 수행하고 그 발견을 판정합니다. | `/aquarium:independent-review` staged, `HEAD`, commit, range, task, 에픽, 또는 special request 타깃 |
 | `orca-review` | 같은 리뷰 계약을 Orca가 소유하고 관리하는 요청된 네이티브 리뷰어로 수행하고 로컬에서 판정합니다. | 리뷰 타깃과 리뷰어를 함께 지정하면 자동, 또는 `/aquarium:orca-review` staged, `HEAD`, commit, range, task, 에픽, 또는 special request 타깃 |
 | `upgrade` | 새로 릴리스된 업스트림 Aquarium 버전을 오케스트레이션된 서브에이전트로 이 생성기 저장소에 채택하고, 검토된 태그와 GitHub Release를 배포합니다. | `/aquarium:upgrade` 선택적 릴리스된 업스트림 버전 |
 
-네 개의 설계 스킬은 Ouroboros를 경계가 정해진 말단 기능으로 구동하므로 Ouroboros가 설치되어 있고 `>=0.51.1,<0.52.0`으로 고정되어야 합니다. `/aquarium:dev-setup`이 별도 승인 뒤에 이를 진단하고 구성합니다. 이 스킬들은 문서만 구체화하며 구현하지 않습니다.
+네 개의 설계 스킬은 Ouroboros를 경계가 정해진 말단 기능으로 구동하므로 Ouroboros가 설치되어 있고 `>=0.51.1,<0.54.0`으로 고정되어야 합니다. `/aquarium:dev-setup-global`이 별도 승인 뒤에 이를 진단하고 구성하며, 플러그인 자체는 `claude plugin`으로 설치합니다. 이 스킬들은 문서만 구체화하며 구현하지 않습니다.
 
 `task-handler`는 일곱 개의 단계 스킬을 순서대로 불러옵니다 — `task-plan`, `task-implement`, `task-refine`, `task-verify`, `task-document`, `task-review`, `task-close`. 그중 하나를 직접 호출하는 것은 필요한 task 컨텍스트를 갖추고 정확히 그 단계를 재개할 때뿐입니다.
 
@@ -104,7 +104,7 @@ plugins/aquarium/                생성된 산출물, 커밋됨
   sync-manifest.json             업스트림 커밋, 오버라이드, 제외, 파일별 해시
 ```
 
-`sync.py`는 업스트림 플러그인을 복사하고, 이름으로 제외된 파일을 버리고, 문자열 치환을 적용하고, 오버라이드를 적용하고, 업스트림 사이드카에서 호출 게이팅을 도출한 뒤 사이드카를 버리고, 마지막으로 호스트 전용 파일 — 번들 리뷰어 서브에이전트, 에디션 소유 `upgrade` 스킬, 그리고 `independent-review`가 실행하는 저장소 상태 검사기 — 를 더하며, 그 스킬이 게이팅을 스스로 선언하지 않으면 생성을 거부합니다. 빈 서브모듈에 대해서는 실행을 거부하고, 변환이 다루지 않는 디렉터리가 업스트림에 생기면 실행을 거부하며, 호스트 고유 텍스트가 살아남으면 실패하고, 출하되는 텍스트를 하나도 고치지 못한 치환 규칙이 있으면 실패하고, 생성된 스크립트가 실행될 수 없으면 실패합니다.
+`sync.py`는 업스트림 플러그인을 복사하고, 이름으로 제외된 파일을 버리고, 문자열 치환을 적용하고, 오버라이드를 적용하고, 업스트림 사이드카에서 호출 게이팅을 도출한 뒤 사이드카를 버리고, 마지막으로 호스트 전용 파일 — 번들 리뷰어 서브에이전트, 에디션 소유 `upgrade` 스킬, 그리고 `independent-review`가 실행하는 저장소 상태 검사기 — 를 더하며, 그 스킬이 게이팅을 스스로 선언하지 않으면 생성을 거부합니다. 빈 서브모듈에 대해서는 실행을 거부하고, 변환이 다루지 않는 플러그인 루트 디렉터리나 파일이 업스트림에 생기면 실행을 거부하며, 호스트 고유 텍스트가 살아남으면 실패하고, 출하되는 텍스트를 하나도 고치지 못한 치환 규칙이 있으면 실패하고, 생성된 스크립트가 실행될 수 없으면 실패합니다.
 
 다섯 개의 파일이 의미적으로 갈라져 치환이 아니라 오버라이드로 유지됩니다.
 
@@ -112,11 +112,13 @@ plugins/aquarium/                생성된 산출물, 커밋됨
 |---|---|
 | `references/review-contract.md` | v0.1.14는 공유 계약을 업스트림의 새 백엔드 분리에 맞춰 다시 쓰면서 independent review를 Dolgorae 불변 캡처와 신규 Codex Reviewer에 못박았습니다. 두 축 모두 여기서는 참이 아니고, 그 차이가 한 절이 아니라 스코프 표·백엔드 소유권·정산·결과 봉투 전체를 관통합니다. 이 오버라이드는 업스트림의 스코프 의미, 동의, 정적 한계, 판정 규칙을 유지하되 캡처 전용 스코프 두 가지를 Orca Review와 같은 이유로 미지원으로 표시하고, 캡처 대신 저장소 상태 기준선을 두어 타깃이 불변이었음이 아니라 리뷰 중 아무도 저장소를 변경하지 않았음을 증명합니다. |
 | `skills/independent-review/SKILL.md` | 업스트림의 Dolgorae-그리고-Codex 백엔드를 호스트 자체 메커니즘으로 파견되는 새 읽기 전용 서브에이전트로 대체하며 번들 `aquarium:independent-reviewer`를 우선합니다. 리뷰어는 코디네이터와 같은 프로바이더에서 실행되므로, 이 스킬은 독립 프로바이더가 아니라 새 컨텍스트를 주장하고, 깊이는 Opus에 넓이는 Sonnet에 두며, 여러 리뷰어에게 서로 다른 렌즈를 주어 커버리지를 얻습니다. 공유 계약은 프로세스 밖 리뷰어 하나를 전제로 쓰였으므로, 이 오버라이드는 계약의 단수 리뷰어·판정·백엔드 생애주기 필드를 파견된 서브에이전트당 한 행으로 매핑하기도 합니다. |
-| `skills/dev-setup/SKILL.md` | 업스트림의 AGENTS.md 정규 저장소 가이드를 유지하고 CLAUDE.md 위임이 실제 `@AGENTS.md` import인지 검증합니다. Mulgae와 Gaori MCP를 사용자 스코프 등록으로 제안하고 `.mcp.json`을 명시적 프로젝트 재정의로 둡니다. 2단계 승인 게이트는 그대로입니다. |
-| `skills/dev-setup/references/agents-guidance.md` | 업스트림과 같은 4개 섹션 구조입니다. Claude Code는 `AGENTS.md`를 스스로 읽지 않지만 `@AGENTS.md` import는 첫 턴 전에 해석하므로, 위임 파일은 파일을 읽으라는 요청 대신 import를 담고, 진단은 산문만의 위임을 격차로 보고합니다. |
-| `skills/dev-setup/references/tool-catalog.md` | Mulgae와 Gaori MCP를 `claude mcp add -s user`로 등록하고, `.mcp.json`을 명시적 프로젝트 재정의로 두며, 사용자·프로젝트·유효 뷰를 `.codex/config.toml`과 타입이 있는 `codex mcp get --json` 출력이 아니라 설정 파일에서 검증합니다. |
+| `skills/dev-setup-global/SKILL.md` | v0.1.15는 사용자 전역 설치를 `dev-setup`에서 분리했고, 이 에디션의 전역 분기도 그와 함께 옮겨 갔습니다. 짝 스킬과 서드파티 스킬은 설정된 Claude Code 스킬 루트 아래에 설치되고, im-not-ai는 자기 Claude 페이로드를 실체화하며, Ouroboros 구성요소는 이 호스트가 가진 설치 하나로 축소됩니다. Ouroboros는 home별 규칙·스킬·MCP 등록이 아니라 플러그인으로 도달하므로, 전역 설정은 CLI 버전과 플러그인 스코프 등록을 보고하고 설치와 업그레이드는 `claude plugin`에 맡깁니다. 번들 `aquarium-dev` 채널은 여기서 배포되지 않으므로 제안되지도 않습니다. |
+| `skills/dev-setup/references/agents-guidance.md` | 업스트림과 같은 구조이며, 그 구조는 이제 일곱 개의 핵심 동작입니다. Claude Code는 `AGENTS.md`를 스스로 읽지 않지만 `@AGENTS.md` import는 첫 턴 전에 해석하므로, 위임 파일은 파일을 읽으라는 요청 대신 import를 담고, 진단은 산문만의 위임을 격차로 보고합니다. |
+| `references/tool-catalog.md` | Mulgae와 Gaori MCP를 `claude mcp add -s user`로 등록하고, `.mcp.json`을 명시적 프로젝트 재정의로 두며, 사용자·프로젝트·유효 뷰를 `.codex/config.toml`과 타입이 있는 `codex mcp get --json` 출력이 아니라 설정 파일에서 검증합니다. v0.1.15는 이를 `dev-setup` 밖의 공유 `references/`로 옮겼고, 제외된 채널과 함께 `aquarium-dev` 절을 버렸으며, 업스트림의 home별 Ouroboros 장치를 이 호스트의 플러그인 통합으로 대체했습니다. |
 
-나머지는 전부 문자열 치환입니다. `$aquarium:` 시길은 `/aquarium:`이 되고, `$use-*` 스킬 시길은 `/use-*`가 되며, 유지보수 스킬 시길 `$create-podway-procedure`는 `/create-podway-procedure`가 되고, Ouroboros 시길 `$interview`, `$pm`, `$seed`, `$qa`는 Ouroboros가 사용자 스코프 스킬이 아니라 Claude Code 플러그인으로 설치되므로 `/ouroboros:*`가 되고, 별도 설치되는 `$deslop`은 `/deslop`이 되며, `request_user_input`은 `AskUserQuestion`이 되고 — task-close의 "가용할 때" 헤지는 이 호스트에서 그 도구가 항상 존재하므로 제거되며, Lora는 `--agent claude-code`로 설치되며, 워크플로우가 미러링하는 `Codex goal`은 Claude Code 할 일 목록이 되고 — Ouroboros 통합이 메커니즘을 명명하는 자리에서는 `TodoWrite`로 기록되며 — 검사 스크립트는 스킬을 Claude Code 루트 — `CLAUDE_CONFIG_DIR`와 `~/.claude/skills` — 에서만 해석하고 Codex 대신 이 호스트에 대해 Ouroboros를 진단하며, 사용자 스코프 스킬은 `~/.claude/skills`에 설치되고, `release-qa`의 호스트 중립적인 "available agent delegation surface"는 이 호스트 자신의 서브에이전트 메커니즘이 되며 독립 클러스터는 단일 메시지로 병렬 파견되고 — 도구 이름이 아니라 메커니즘을 대는 것은 Claude Code가 그 이름을 이미 한 번 바꿨기 때문이고 — `orca-review`는 캡처 전용 스코프 두 가지를 independent review로 넘기라는 안내를 잃으며(여기서는 두 백엔드 모두 지원하지 않으므로), 공유 판정 계약은 independent review를 캡처하는 백엔드와 묶기를 멈추고, 쓰기 스킬 검사는 Humanizer와 im-not-ai를 공유 크로스 에이전트 루트와 Codex home이 아니라 Claude Code 스킬 루트에서 찾으며, 훅 명령은 Codex의 `${PLUGIN_ROOT}` 대신 `${CLAUDE_PLUGIN_ROOT}`를 해석합니다.
+`skills/dev-setup/SKILL.md`은 v0.1.15가 사용자 전역 설치를 `dev-setup-global`로 옮기기 전까지 그 다섯 중 하나였고, 그 자리는 `skills/dev-setup-global/SKILL.md`이 대신했습니다. 지금도 갈라지는 것은 문자열 구간 세 곳이고 그중 둘은 금지 니들을 담고 있어 오버라이드가 남든 남지 않든 규칙이 필요했으므로, 오버라이드는 폐기되고 치환 세 개가 그 자리를 대신했습니다 — 횟수를 센 교체가 폐기된 오버라이드를 바이트 단위로 재현합니다.
+
+나머지는 전부 문자열 치환입니다. `$aquarium:` 시길은 `/aquarium:`이 되고, `$use-*` 스킬 시길은 `/use-*`가 되며, 유지보수 스킬 시길 `$create-podway-procedure`는 `/create-podway-procedure`가 되고, Ouroboros 시길 `$interview`, `$pm`, `$seed`, `$qa`는 Ouroboros가 사용자 스코프 스킬이 아니라 Claude Code 플러그인으로 설치되므로 `/ouroboros:*`가 되고, 별도 설치되는 `$deslop`은 `/deslop`이 되며, `request_user_input`은 `AskUserQuestion`이 되고 — task-close의 "가용할 때" 헤지는 이 호스트에서 그 도구가 항상 존재하므로 제거되며, Lora는 `--agent claude-code`로 설치되며, 워크플로우가 연동하는 `Codex goal`은 Claude Code 할 일 목록이 되고, 검사 스크립트는 스킬을 Claude Code 루트 — `CLAUDE_CONFIG_DIR`와 `~/.claude/skills` — 에서만 해석하고 Codex 대신 이 호스트에 대해 Ouroboros를 진단하며, 사용자 스코프 스킬은 `~/.claude/skills`에 설치되고, `release-qa`의 호스트 중립적인 "available agent delegation surface"는 이 호스트 자신의 서브에이전트 메커니즘이 되며 독립 클러스터는 단일 메시지로 병렬 파견되고 — 도구 이름이 아니라 메커니즘을 대는 것은 Claude Code가 그 이름을 이미 한 번 바꿨기 때문이고 — `orca-review`는 캡처 전용 스코프 두 가지를 independent review로 넘기라는 안내를 잃으며(여기서는 두 백엔드 모두 지원하지 않으므로), 공유 판정 계약은 independent review를 캡처하는 백엔드와 묶기를 멈추고, 쓰기 스킬 검사는 Humanizer와 im-not-ai를 공유 크로스 에이전트 루트와 Codex home이 아니라 Claude Code 스킬 루트에서 찾으며, v0.1.15가 짝 스킬과 서드파티 스킬을 위해 더한 존재만 확인하는 신뢰 표도 같은 루트를 통해 해석되고, 훅 명령은 Codex의 `${PLUGIN_ROOT}` 대신 `${CLAUDE_PLUGIN_ROOT}`를 해석합니다.
 
 마지막 것은 하중을 받는 부분입니다. Claude Code에서 `PLUGIN_ROOT`는 설정되지 않으므로 치환되지 않은 명령은 `/hooks/task_commit_gate.py`로 전개되고, `python3`이 2로 종료하며, `PreToolUse`는 종료 코드 2를 거부로 읽어 모든 `Bash` 호출을 막습니다. 금지 니들과 필수 텍스트 단언이 함께 이를 지킵니다.
 
@@ -134,11 +136,19 @@ plugins/aquarium/                생성된 산출물, 커밋됨
 
 업스트림은 v0.1.10에서 `assets/logo-*.png`와 매니페스트의 `composerIcon`, `logo` 필드를 제거했으므로 생성된 매니페스트는 `metadata.icon`과 `metadata.logo`를 그냥 잃습니다. 또한 자기 README용으로 2.3 MB짜리 `assets/hero.png` 배너를 더했는데, 플러그인 안의 어떤 것도 이를 참조하지 않고 Claude Code는 결코 렌더링하지 않습니다. 그 파일은 이름으로 제외되며, 제외는 그 파일이 업스트림에 여전히 존재하는지와 생성된 어떤 텍스트도 그 이름을 대지 않는지에 걸려 있으므로, 조용히 적용을 멈추거나 조용히 참조를 감출 수 없습니다.
 
-v0.1.14가 두 번째 제외를 더했습니다. 업스트림은 independent review를 신규 Codex Reviewer를 실행하는 Dolgorae 불변 캡처로 라우팅하면서, 그 백엔드의 후보·캡처·정산 규칙을 정의하는 `references/dolgorae-review-contract.md`를 함께 배포했습니다. 이 아티팩트는 대신 호스트 서브에이전트를 파견하고 `orca-review`는 Dolgorae 사용이 금지되어 있으므로, 여기서는 그 계약을 경유하는 것이 없고 그대로 실으면 이 에디션에 없는 생애주기를 문서화하게 됩니다. Dolgorae 자체는 선택 가능한 서드파티 CLI로 도구 카탈로그에 남고, 떨어져 나가는 것은 소비자 계약뿐이며, 같은 참조 검사가 두 리뷰 오버라이드가 그 이름을 대지 못하게 막습니다.
+v0.1.14가 두 번째 파일 제외를 더했습니다. 업스트림은 independent review를 신규 Codex Reviewer를 실행하는 Dolgorae 불변 캡처로 라우팅하면서, 그 백엔드의 후보·캡처·정산 규칙을 정의하는 `references/dolgorae-review-contract.md`를 함께 배포했습니다. 이 아티팩트는 대신 호스트 서브에이전트를 파견하고 `orca-review`는 Dolgorae 사용이 금지되어 있으므로, 여기서는 그 계약을 경유하는 것이 없고 그대로 실으면 이 에디션에 없는 생애주기를 문서화하게 됩니다. Dolgorae 자체는 선택 가능한 서드파티 CLI로 도구 카탈로그에 남고, 떨어져 나가는 것은 소비자 계약뿐이며, 같은 참조 검사가 두 리뷰 오버라이드가 그 이름을 대지 못하게 막습니다.
 
-그 밖에 `Codex`라는 이름은 생성된 텍스트에서 금지됩니다. 세 파일이 면제됩니다. `tool-catalog.md`는 Codex CLI를 Mulgae 리뷰 프로바이더이자 필요한 CLI 버전으로 명명하며 이는 여기서도 참이고, v0.1.14의 새 `aquarium-dev` 스킬과 그 개발 계약은 다른 호스트를 서드파티로 지목합니다 — 일곱 언급 중 여섯은 개발 채널이 결코 건드리지 않아야 할 것에 대한 제약이고, 나머지 하나는 업스트림의 동결된 v1 producer 계약이 실제로 빌드하는 Codex 플러그인 산출물을 명명합니다. 면제는 그것이 판단된 업스트림 다이제스트를 기록하므로 그 파일이 바뀌면 동기화가 멈춥니다. v0.1.11은 `orca-review/references/provider-contracts.md`를 명명된 프로바이더 중심으로 다시 써서 `Codex` 언급을 남기지 않았으므로, 그 면제는 회전이 아니라 폐기되었습니다. v0.1.13 회전은 오버라이드가 출하하는 모든 언급을 재독해 Mulgae 프로바이더 언급만 남겼는데, Claude 재도출이 업스트림의 새 Codex 전용 격리 런처 문법을 통째로 대체했기 때문입니다.
+v0.1.15는 여기에 둘을 더했고, 둘 다 업스트림이 그 릴리스에서 함께 배포한 개발 채널에서 왔습니다. `references/development-contract.md`는 `aquarium-dev` producer들과 그 호스트 관리자 사이의 공유 계약이고, `skills/dev-setup-global/scripts/inspect_ouroboros.py`는 `ouroboros.codex.artifacts`를 import해 발견된 home마다 비교하는 방식으로 Codex home별 Ouroboros 규칙·스킬·MCP 등록을 측정합니다. 둘 중 어느 것도 이 아티팩트가 가진 것을 서술하지 않으며, 그중 모듈은 이 에디션이 설치하지 않는 패키지의 import를 출하했을 것입니다.
+
+채널 자체는 파일 단위가 아니라 플러그인 루트에서 제외됩니다. v0.1.15는 Darwin arm64 CLI와 stdio MCP 런타임을 `tools/aquarium-dev/` 아래에 함께 배포하고 — 이 채널은 Aquarium과 그 producer CLI들의 릴리스되지 않은 로컬 main 산출물을 `~/.aquarium-dev` 아래에 빌드하고, `CODEX_HOME`을 그대로 넘겨 주며, Codex 플러그인 산출물을 만듭니다 — 다른 호스트의 `mcp_servers` 형태로 쓰인 플러그인 루트 `.mcp.json`에서 그것을 등록했습니다. 여기서는 어떤 스킬도 이를 경유하지 않고, 37 KB짜리 해시 고정 wheel 잠금 파일은 쓸모없는 짐을 출하하는 것이 되며, 번역된 등록은 어떤 설치도 제공하지 않는 서버를 시작시켜 모든 저장소의 모든 세션에서 MCP 연결 실패를 보고하게 됩니다.
+
+그 제외에는 자체 가드가 필요했습니다. `COPIED_DIRECTORIES`는 `hooks/`가 조용히 빠졌을 때 대응 검사를 얻었지만, 그 검사는 디렉터리만 걸렀고 플러그인 루트 파일은 애초에 아무것도 복사하지 않습니다 — 그래서 `.mcp.json`은 똑같은 방식으로 사라졌을 것입니다. 이제 생성은 다루지 않는 디렉터리뿐 아니라 다루지 않는 플러그인 루트 파일에 대해서도 중단하고, 플러그인 루트 제외는 각각 업스트림에 여전히 존재해야 하며, `tests/validate.rb`가 그 목록을 `scripts/sync.py`에서 읽으므로 거기서 폐기된 제외는 같은 커밋에서 여기서도 더 이상 용인되지 않습니다.
+
+그 밖에 `Codex`라는 이름은 생성된 텍스트에서 금지됩니다. 한 파일이 면제됩니다. `tool-catalog.md`는 Codex CLI를 Mulgae 리뷰 프로바이더로 명명하며 — 프로바이더 옵트인, 필요한 CLI 버전, 네이티브 로그인, 여러 자격 증명 신원, 그리고 실행 파일 — 이는 여기서도 참입니다. 면제는 그것이 판단된 업스트림 다이제스트를 기록하므로 그 파일이 바뀌면 동기화가 멈춥니다. v0.1.11은 `orca-review/references/provider-contracts.md`를 명명된 프로바이더 중심으로 다시 써서 `Codex` 언급을 남기지 않았으므로 그 면제는 회전이 아니라 폐기되었고, v0.1.15는 업스트림이 그 스킬을 삭제하면서 `aquarium-dev` 면제 두 개를 폐기했습니다. 회전할 때마다 다이제스트가 움직이기 전에 오버라이드가 출하하는 모든 언급을 다시 읽습니다.
 
 Mulgae와 Gaori MCP 탐침도 같은 이유로 재조준되었습니다. 업스트림은 이를 `codex mcp get --json`으로 읽고 로컬 뷰를 위해 `CODEX_HOME`을 `.codex/`로 향하게 하므로, 이 호스트에서는 검사기가 자기 카탈로그가 사용자에게 만들라고 지시한 등록을 결코 볼 수 없었고 `--require-mulgae-mcp`는 그 도구를 영원히 degraded로 보고했습니다. 생성된 검사기는 Claude Code의 세 가지 뷰를 설정에서만 읽습니다 — `CLAUDE_CONFIG_DIR`를 존중하며 `.claude.json`에서 사용자 스코프 항목과 비공개 프로젝트별 항목을, `.mcp.json`에서 공유 항목과 그 승인 상태를 읽고 — 문서화된 우선순위에서 유효 뷰를 도출합니다. `claude mcp get`은 의도적으로 결코 호출하지 않습니다. 그것은 승인된 서버를 헬스체크하므로 서버를 시작시키는데, 설정 작업은 서버를 시작시켜서는 안 되기 때문입니다. 아직 아무도 승인하지 않은 `.mcp.json` 서버는 degraded가 아니라 `registration_pending_approval`을 동반한 `unverifiable`입니다. 앵커가 업스트림이 가진 가장 안정적인 텍스트가 되도록 함수 두 개를 통째로 교체하며, `tests/test_claude_mcp_inspection.py`가 비공개 `CLAUDE_CONFIG_DIR` 아래의 설정 픽스처에 대해 출하되는 바이트를 실행합니다.
+
+금지 니들 하나가 물결표를 하나 더 달고 있었습니다. `~/.agents/skills`는 산문에서 공유 크로스 에이전트 루트를 잡아내지만, Python은 이를 `Path.home() / ".agents/skills"`로 쓰므로 결코 매칭되지 않습니다 — 그리고 v0.1.15는 그런 표기를 열세 곳에 새로 적었습니다 — 새로 생긴 존재만 확인하는 신뢰 표에 열한 곳, Lore 준비 상태 비교에 한 곳, Deslop에 한 곳으로, v0.1.14에는 통틀어 두 곳뿐이었습니다. 그대로 두었다면 Claude Code 루트만 탐색하는 검사기가 발견된 모든 설치를 그 루트가 결코 만들어낼 수 없는 경로와 비교해 올바른 설치를 영원히 degraded로 보고했을 것이고, 이는 v0.1.14에서 쓰기 스킬들이 겪은 것과 같은 실패입니다. 이제 니들은 두 목록 모두에서 `.agents/skills`이므로, Python 표기는 출하되는 대신 생성을 중단시킵니다.
 
 ## 업그레이드
 
@@ -173,4 +183,4 @@ claude plugin validate --strict plugins/aquarium
 
 ## 라이선스
 
-업스트림에서 상속한 MIT입니다. 이 저장소는 서드파티 스킬 소스를 벤더링하지 않습니다. Deslop과 Lora는 `/aquarium:dev-setup`이 각자의 업스트림 저장소에서 설치하며, 각각 원래 라이선스를 유지합니다.
+업스트림에서 상속한 MIT입니다. 이 저장소는 서드파티 스킬 소스를 벤더링하지 않습니다. Deslop과 Lora는 `/aquarium:dev-setup-global`이 각자의 업스트림 저장소에서 설치하며, 각각 원래 라이선스를 유지합니다.

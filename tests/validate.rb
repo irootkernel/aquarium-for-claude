@@ -105,7 +105,7 @@ end
 # --- host-neutral generated text -------------------------------------------
 
 FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$create-", "$lore-", "$orca-cli", "request_user_input",
-                  "--agent codex", "~/.agents/skills", "${PLUGIN_ROOT}", ".codex/config",
+                  "--agent codex", ".agents/skills", "${PLUGIN_ROOT}", ".codex/config",
                   "Codex"].freeze
 
 # Lowercase `$name` tokens that are shell variables rather than skill sigils, so
@@ -165,7 +165,7 @@ end
 # the guard. Comparing them as sets closes both directions: a Ruby-only needle
 # would let generation write text CI then rejects, and a Python-only needle
 # would leave the artifact unguarded whenever the generated tree is checked
-# without regenerating it. `~/.agents/skills` was Python-only until this check
+# without regenerating it. `.agents/skills` was Python-only until this check
 # existed. A Ruby-only sigil exception would hide a real sigil from CI, and a
 # Python-only one would let generation ship text this file then rejects.
 #
@@ -176,7 +176,7 @@ EXTRACT_TABLES = <<~PYTHON
   import ast, json, pathlib
 
   tree = ast.parse(pathlib.Path("scripts/sync.py").read_text())
-  wanted = {"FORBIDDEN", "SIGIL_LITERALS"}
+  wanted = {"FORBIDDEN", "SIGIL_LITERALS", "EXCLUDED_PLUGIN_ROOT"}
   found = {}
   for node in tree.body:
       target = getattr(node, "target", None)
@@ -251,6 +251,26 @@ if inspection.file?
     assert(script.scan("#{helper}(").length == 1, "inspection must not call the Codex-based #{helper}")
   end
   assert(!script.include?('"mcp", "get", "mulgae"') && !script.include?('"mcp", "get", "gaori"'), "inspection must not health-check Mulgae or Gaori through claude mcp get")
+  # v0.1.15 added a presence-only trust table for the paired and third-party
+  # skills. The forbidden scan already rejects the shared root, but the table
+  # must positively resolve through `skill_roots()`, or a future entry could
+  # reach an unreachable path some other way.
+  assert(script.include?("trusted_root = skill_roots()[0]"), "the trusted skill table must resolve through the Claude Code skill root")
+end
+
+# The global inspector reaches the project inspector across skill directories, so
+# the excluded per-home Ouroboros module must be gone from both its imports and
+# its component set, and its user-scope MCP view must come from configuration.
+global_inspection = PLUGIN.join("skills/dev-setup-global/scripts/inspect_global_tools.py")
+if global_inspection.file?
+  script = global_inspection.read
+  assert(!script.include?("inspect_ouroboros import"), "the global inspector must not import the excluded per-home module")
+  assert(!script.include?("InvalidCodexHome"), "the global inspector must not handle a Codex-home error it cannot raise")
+  assert(!script.include?("codex_home"), "the global inspector must not carry per-home options")
+  assert(!script.include?('"aquarium-dev",'), "the global inspector must not offer the excluded development channel")
+  assert(script.include?("inspector.inspect_ouroboros("), "the global inspector must keep the plugin-scoped Ouroboros probe")
+  assert(script.include?("inspector.inspect_claude_mcp("), "the global inspector must read the user-scope MCP view from configuration")
+  assert(script.include?("inspector.skill_roots()[0]"), "the global inspector must diagnose canonical skills in the Claude Code skill root")
 end
 
 # --- generated scripts run -----------------------------------------------
@@ -312,10 +332,32 @@ assert(
 
 # `COPIED_DIRECTORIES` is an allowlist with no counterpart check, so `hooks/`
 # appeared upstream and was dropped in silence until someone noticed.
+#
+# A plugin-root entry may also be excluded on purpose — v0.1.15 bundled a
+# development channel under `tools/` and registered it from a `.mcp.json` that
+# only the other host can read. Those names come from `scripts/sync.py`, so an
+# exclusion retired there stops being tolerated here in the same commit.
+excluded_plugin_root = sync_tables.fetch("EXCLUDED_PLUGIN_ROOT")
 if UPSTREAM_PLUGIN.directory?
-  upstream_directories = UPSTREAM_PLUGIN.children.select(&:directory?).map { |p| p.basename.to_s } - [".codex-plugin"]
+  upstream_directories = UPSTREAM_PLUGIN.children.select(&:directory?).map { |p| p.basename.to_s } -
+                         [".codex-plugin"] - excluded_plugin_root
   upstream_directories.sort.each do |name|
     assert(PLUGIN.join(name).directory?, "generated plugin is missing upstream directory `#{name}/`")
+  end
+  # Nothing copies a top-level upstream file, so one that is neither excluded nor
+  # deliberately copied would vanish exactly the way `hooks/` once did.
+  # `reject(&:directory?)` rather than `select(&:file?)`, so this partitions the
+  # plugin root with the directory scan above and a broken symlink cannot fall
+  # between them.
+  upstream_root_files = UPSTREAM_PLUGIN.children.reject(&:directory?).map { |p| p.basename.to_s } -
+                        excluded_plugin_root
+  assert(
+    upstream_root_files.empty?,
+    "upstream plugin-root files are neither copied nor excluded: #{upstream_root_files.sort.inspect}"
+  )
+  excluded_plugin_root.each do |name|
+    assert(UPSTREAM_PLUGIN.join(name).exist?, "plugin-root exclusion targets `#{name}`, which upstream no longer ships")
+    assert(!PLUGIN.join(name).exist?, "excluded plugin-root entry was generated: #{name}")
   end
 end
 
@@ -334,7 +376,26 @@ assert(
   excluded.include?("references/dolgorae-review-contract.md"),
   "the Dolgorae consumer contract must stay excluded while no skill routes through it"
 )
+# The bundled `aquarium-dev` channel is excluded whole, so the shared contract
+# that describes its producers, manager, and plugin MCP registration documents a
+# lifecycle this edition does not have.
+assert(
+  excluded.include?("references/development-contract.md"),
+  "the development-channel contract must stay excluded while the channel is not shipped"
+)
+# Ouroboros reaches this host as a plugin, so per-home rules, skills, and MCP
+# registration are dimensions that do not exist here; the shrunken global
+# component calls the project inspector's plugin-scoped probe instead.
+assert(
+  excluded.include?("skills/dev-setup-global/scripts/inspect_ouroboros.py"),
+  "the per-home Ouroboros inspector must stay excluded"
+)
 generated_text = Pathname.glob(PLUGIN.join("**/*.{md,json,py,yaml}")).sort.reject { |p| p.basename.to_s == "sync-manifest.json" }
+assert(
+  sync_manifest.fetch("excluded_plugin_root").sort == excluded_plugin_root.sort,
+  "sync manifest plugin-root exclusions #{sync_manifest.fetch('excluded_plugin_root').inspect} " \
+  "do not match scripts/sync.py #{excluded_plugin_root.inspect}"
+)
 excluded.each do |relative|
   assert(!PLUGIN.join(relative).exist?, "excluded file was generated: #{relative}")
   assert(UPSTREAM_PLUGIN.join(relative).file?, "exclusion targets a file upstream no longer ships: #{relative}") if UPSTREAM_PLUGIN.directory?
@@ -467,6 +528,14 @@ assert(
 
 # --- documentation convention ----------------------------------------------
 
+# The convention is this repository's, so it is asserted on the Markdown this
+# repository writes: its own documents, the full-file overrides, and the
+# host-only additions. The generated tree is excluded because most of it is
+# upstream's prose under upstream's style — v0.1.15 shipped two hard-wrapped
+# references — and the part this repository does author lands there byte for
+# byte from `overrides/` and `additions/`, which are checked at the source. The
+# one authored thing left unchecked is a substitution's replacement text, so
+# keep a multi-line replacement to one prose line per paragraph by hand.
 def structural?(line)
   # Match the stripped line: an indented sub-bullet is still structural, and
   # classifying it as prose makes two adjacent ones look hard-wrapped.
@@ -474,7 +543,10 @@ def structural?(line)
   stripped.empty? || stripped.match?(/\A(?:\#{1,6}\s|[-*+]\s|\d+\.\s|>|\||<)/)
 end
 
-Pathname.glob(ROOT.join("**/*.md")).reject { |p| p.to_s.include?("/upstream/") }.sort.each do |path|
+authored_markdown = Pathname.glob(ROOT.join("**/*.md")).reject do |path|
+  path.to_s.include?("/upstream/") || path.to_s.start_with?(PLUGIN.to_s + File::SEPARATOR)
+end
+authored_markdown.sort.each do |path|
   fenced = false
   in_frontmatter = false
   previous_prose = false

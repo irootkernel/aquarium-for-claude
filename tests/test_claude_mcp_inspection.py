@@ -69,7 +69,7 @@ class ClaudeMcpInspectionTest(unittest.TestCase):
         self.assertEqual(registration["effective_scope"], "none")
         self.assertEqual(registration["global"]["reason"], "user_configuration_missing")
         self.assertEqual(registration["local"]["reason"], "project_configuration_missing")
-        self.assertEqual(registration["recommendation"], "install_global_registration")
+        self.assertEqual(registration["recommendation"], "continue_with_dev_setup_global")
 
     def test_user_scope_registration_is_configured_globally(self) -> None:
         self.write_user_configuration({"mcpServers": {"mulgae": self.entry(["mcp"])}})
@@ -196,6 +196,49 @@ class ClaudeMcpInspectionTest(unittest.TestCase):
         self.assertIn(".mcp.json", [entry["path"] for entry in tool["configuration"]])
         self.assertNotIn("codex_version", tool["mcp_registration"])
         self.assertIn("claude_version", tool["mcp_registration"])
+
+
+class ClaudeSkillRootTest(unittest.TestCase):
+    """The roots the inspection searches, and the root it trusts, are this host's.
+
+    v0.1.15 hard-coded `~/.agents/skills` for eleven paired and third-party
+    skills and the active Codex home for im-not-ai. Claude Code loads neither, so
+    left alone every correct installation reports as absent. The Python spelling
+    carries no tilde, which is why the forbidden needle alone did not catch it.
+    """
+
+    def setUp(self) -> None:
+        self.module = load_inspector()
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.config_dir = Path(self.temporary.name).resolve() / "config"
+        self.config_dir.mkdir()
+        self.previous = os.environ.get("CLAUDE_CONFIG_DIR")
+        self.addCleanup(self.restore_environment)
+
+    def restore_environment(self) -> None:
+        if self.previous is None:
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        else:
+            os.environ["CLAUDE_CONFIG_DIR"] = self.previous
+
+    def test_configured_root_wins_and_no_other_host_root_is_searched(self) -> None:
+        os.environ["CLAUDE_CONFIG_DIR"] = str(self.config_dir)
+        roots = self.module.skill_roots()
+        self.assertEqual(roots[0], self.config_dir / "skills")
+        self.assertEqual(roots, [self.config_dir / "skills", Path.home() / ".claude/skills"])
+
+    def test_default_root_is_the_claude_code_one(self) -> None:
+        os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        self.assertEqual(self.module.skill_roots(), [Path.home() / ".claude/skills"])
+
+    def test_writing_skills_are_expected_in_the_effective_root(self) -> None:
+        os.environ["CLAUDE_CONFIG_DIR"] = str(self.config_dir)
+        for inspect in (self.module.inspect_humanizer, self.module.inspect_im_not_ai):
+            result = inspect()
+            self.assertEqual(
+                Path(result["expected_target"]).parent, self.config_dir / "skills"
+            )
 
 
 class ClaudeOuroborosInspectionTest(unittest.TestCase):

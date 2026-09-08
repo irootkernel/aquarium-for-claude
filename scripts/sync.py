@@ -107,6 +107,44 @@ EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
         "is forbidden to use Dolgorae, so no skill here routes through it and the "
         "contract would document a lifecycle this edition does not have",
     ),
+    (
+        "references/development-contract.md",
+        "the shared contract for the `aquarium-dev` producers and host manager "
+        "upstream bundled under `tools/` in v0.1.15; that development channel is "
+        "excluded from this artifact, so the contract would document a lifecycle "
+        "this edition does not have",
+    ),
+    (
+        "skills/dev-setup-global/scripts/inspect_ouroboros.py",
+        "per-Codex-home Ouroboros inspection: it resolves `CODEX_HOME` and `~/.codex`, "
+        "imports `ouroboros.codex.artifacts`, and compares packaged Codex rules against "
+        "each discovered home; Ouroboros reaches Claude Code as a plugin rather than as "
+        "per-home rules and skills, so every dimension it measures is absent here and "
+        "`inspect_tools.py` already carries this edition's plugin-scoped probe",
+    ),
+)
+
+# Upstream plugin-root entries this transformation never copies. `copy_tree`
+# walks `COPIED_DIRECTORIES` and no top-level file at all, so both a new
+# directory and a new file are decisions, and each entry pairs the name with the
+# reason it does not belong in a Claude Code artifact. The entry must still
+# exist upstream, for the same reason an exclusion must.
+EXCLUDED_PLUGIN_ROOT: tuple[tuple[str, str], ...] = (
+    (
+        "tools",
+        "the `aquarium-dev` CLI and stdio MCP runtime upstream bundled in v0.1.15: a "
+        "Darwin arm64 development channel that builds unreleased local-main artifacts "
+        "of Aquarium and its producer CLIs under `~/.aquarium-dev`, passes `CODEX_HOME` "
+        "through to them, and produces Codex plugin artifacts; no skill in this artifact "
+        "routes through it, and its 37 KB hash-pinned wheel lock would ship dead weight",
+    ),
+    (
+        ".mcp.json",
+        "the plugin-level registration for that development channel, in Codex's "
+        "`mcp_servers` shape with `cwd` and `tool_timeout_sec`; the channel is excluded, "
+        "and a translated registration would start a server no installation provides and "
+        "report a failed MCP connection in every session of every repository",
+    ),
 )
 
 # Ordered literal substitutions applied to copied Markdown. Order matters: a
@@ -180,15 +218,15 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "Use structured `AskUserQuestion` and ask all three questions together",
     ),
     ("`request_user_input`", "`AskUserQuestion`"),
-    ("Codex goal", "Claude Code todo list"),
-    # ouroboros-integration.md names the mirrored surface generically as "the
-    # host goal mechanism". The mechanism has a name on this host — the todo
-    # list written through `TodoWrite` — and naming it tells the model how to
-    # mirror, not merely where, matching the `Codex goal` mapping above.
+    # Podway's goal-separation section keeps two more mentions after the mapping
+    # below, and both name the host rather than a goal. The anchor spans the pair
+    # so one rule settles the sentence, and it precedes the mapping because the
+    # anchor still carries the unmapped phrase.
     (
-        "mirror only the current actionable goal into the host goal mechanism",
-        "mirror only the current actionable goal into the Claude Code todo list via `TodoWrite`",
+        "does not independently prove the Codex objective complete. Verify the actual requirements and external results, and continue any remaining authorized work. A Podway blocker does not automatically block a Codex goal: follow the current Codex tool contract, including any recurrence threshold, and continue useful independent work.",
+        "does not independently prove the host objective complete. Verify the actual requirements and external results, and continue any remaining authorized work. A Podway blocker does not automatically block a Claude Code todo list: follow that list's current tool contract, including any recurrence threshold, and continue useful independent work.",
     ),
+    ("Codex goal", "Claude Code todo list"),
     ("fresh Codex audit", "fresh from-scratch audit"),
     # Ouroboros registers its skills with the host agent, so the component whose
     # health `dev-setup` establishes is the Claude Code one here. The bundle
@@ -196,7 +234,37 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # the anchor is the shortest unique phrase so the next punctuation edit
     # cannot break it again.
     ("Codex skill health", "Claude Code skill health"),
-    ("Codex and runtime components", "host integration and runtime components"),
+    (
+        "Use the global v2 inspector's `current_home_readiness`, not `all_discovered_homes_readiness`. Require rules and skills in the current Codex home, the matching MCP package, and a `home_binding` to that same home; shared `~/.agents/skills` copies do not satisfy readiness.",
+        "Use the global inspector's `ouroboros` component. Require a supported CLI and a plugin-scoped MCP registration that resolves; this host installs Ouroboros once as a plugin, so there is no per-home readiness, `home_binding`, or MCP package pin to require.",
+    ),
+    (
+        "For Ouroboros, this means one CLI upgrade and one integration update per distinct discovered Codex home, not one installation per repository.",
+        "For Ouroboros, this means one CLI upgrade; its Claude Code integration is one plugin installation that global setup diagnoses rather than installs.",
+    ),
+    # `dev-setup` was a full-file override until v0.1.15 moved user-global
+    # installation into `dev-setup-global`. What it still diverges on is three
+    # literal spans, two of which carry a forbidden needle and would need a rule
+    # whether or not the override stayed, so the override is retired and these
+    # take its place. Each anchor occurs exactly once in upstream Markdown.
+    (
+        "For a canonical user-global skill path under `~/.agents/skills`, or the active canonical Codex skill root where an upstream contract requires it, check only whether the path exists.",
+        "For a canonical user-global skill path under the configured Claude Code skill root \u2014 `$CLAUDE_CONFIG_DIR/skills` when that variable is set, otherwise `~/.claude/skills` \u2014 check only whether the path exists.",
+    ),
+    (
+        "Create, change, or remove a project-local registration only when the user explicitly requested local scope or repository authority already requires it. Preserve unrelated Codex configuration.",
+        "Create, change, or remove a project-local `.mcp.json` registration only when the user explicitly requested local scope or repository authority already requires it. Preserve unrelated Claude Code configuration.",
+    ),
+    # Claude Code resolves a `@AGENTS.md` import before the first turn but never
+    # reads `AGENTS.md` on its own, so prose-only delegation silently leaves the
+    # canonical guidance unloaded. `agents-guidance.md` owns the delegation file;
+    # this makes the skill that reviews the pair report the gap.
+    (
+        "Reuse verified repository facts while assessing structure, behavior, duplication, and project-specific constraints. An explicit diagnosis-only request reports findings without drafting a proposal.\n",
+        "Reuse verified repository facts while assessing structure, behavior, duplication, and project-specific constraints. An explicit diagnosis-only request reports findings without drafting a proposal.\n"
+        "\n"
+        "Claude Code loads CLAUDE.md but never reads AGENTS.md on its own, so a CLAUDE.md that delegates in prose alone leaves the canonical guidance unloaded. Report that as a gap and propose the delegation file in `agents-guidance.md`, whose `@AGENTS.md` line Claude Code resolves as a real import before the first turn.\n",
+    ),
     # release-qa's dispatch instructions are host-neutral because Codex has no
     # first-class subagents. This host does, and independent subagents launched
     # in a single message is what parallel dispatch concretely means here.
@@ -220,20 +288,28 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
 # another host's root is neither reachable here nor a duplicate of anything.
 SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     (
-        '    codex_home = os.environ.get("CODEX_HOME")\n'
+        "    codex_home = os.environ.get(\"CODEX_HOME\")\n"
         "    if codex_home:\n"
-        '        candidates.append(Path(codex_home).expanduser().joinpath("skills"))\n'
+        "        try:\n"
+        "            candidates.append(Path(codex_home).expanduser().joinpath(\"skills\"))\n"
+        "        except (OSError, ValueError, RuntimeError):\n"
+        "            pass\n"
         "    candidates.extend(\n"
-        '        [Path.home().joinpath(".codex/skills"), Path.home().joinpath(".agents/skills")]\n'
+        "        [Path.home().joinpath(\".codex/skills\"), Path.home().joinpath(\".agents/skills\")]\n"
         "    )\n",
         "    # Only Claude Code skill roots count here. A skill installed in\n"
         "    # another host's root is not reachable from this one, and counting it\n"
         "    # would report a cross-host copy as a duplicate installation and\n"
-        "    # degrade a diagnosis that is about this host.\n"
-        '    configured = os.environ.get("CLAUDE_CONFIG_DIR")\n'
+        "    # degrade a diagnosis that is about this host. The guard upstream added\n"
+        "    # in v0.1.15 is kept: the configured root comes from the environment and\n"
+        "    # an unexpandable value must not take the whole inspection down.\n"
+        "    configured = os.environ.get(\"CLAUDE_CONFIG_DIR\")\n"
         "    if configured:\n"
-        '        candidates.append(Path(configured).expanduser().joinpath("skills"))\n'
-        '    candidates.append(Path.home().joinpath(".claude/skills"))\n',
+        "        try:\n"
+        "            candidates.append(Path(configured).expanduser().joinpath(\"skills\"))\n"
+        "        except (OSError, ValueError, RuntimeError):\n"
+        "            pass\n"
+        "    candidates.append(Path.home().joinpath(\".claude/skills\"))\n",
     ),
     # `claude mcp get` reports a definite not-found on stderr as `No MCP server
     # named "<name>". Configured servers: ...`, which carries neither the
@@ -318,17 +394,38 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    probe[\"reason\"] = \"registration_not_connected\"\n"
         "    return {\"status\": \"degraded\", \"probe\": probe}\n",
     ),
-    # Upstream probes Codex for the Ouroboros MCP registration, so on Claude
-    # Code the component could never report `configured` and every design
-    # skill stayed blocked. Ouroboros registers its Claude MCP server through
-    # its own plugin, which is what this probes instead. The block swallows
-    # upstream's `direct_runtime_configured` / `isolated_runtime_configured`
-    # locals and the `registration_raw` reads together with the probe: the two
-    # runtime rules below replace every downstream consumer, and a narrower
-    # cut would ship NameErrors the AST gate cannot see. The classifier keeps
-    # its upstream arity, so `tool["executable"]` is passed at both call sites
-    # even though the Claude classifier cannot use it.
     (
+        "def inspect_ouroboros(\n"
+        "    repository: Path,\n"
+        "    timeout_seconds: float,\n"
+        "    *,\n"
+        "    codex_home: Path | None = None,\n"
+        "    cli_observation: dict[str, Any] | None = None,\n"
+        ") -> dict[str, Any]:\n"
+        "    tool = (\n"
+        "        dict(cli_observation)\n"
+        "        if cli_observation is not None\n"
+        "        else inspect_ouroboros_cli(repository, timeout_seconds)\n"
+        "    )\n"
+        "    tool[\"supported_range\"] = \">=0.51.1,<0.54.0\"\n"
+        "    environment = {\"CODEX_HOME\": str(codex_home)} if codex_home else None\n"
+        "    tool[\"home_binding\"] = {\n"
+        "        \"status\": \"unverifiable\",\n"
+        "        \"reason\": \"registration_unavailable\",\n"
+        "    }\n"
+        "    tool[\"runtime_package\"] = {\"status\": \"unverifiable\", \"version\": None}\n"
+        "    if codex_home is not None and codex_home.exists() and not codex_home.is_dir():\n"
+        "        reason = \"home_not_a_directory\"\n"
+        "        tool[\"status\"] = \"degraded\"\n"
+        "        for key in (\"codex_integration\", \"mcp_registration\", \"mcp_runtime\"):\n"
+        "            tool[key] = {\"status\": \"unverifiable\", \"probe\": skipped_probe(reason)}\n"
+        "        tool[\"home_binding\"] = {\"status\": \"unverifiable\", \"reason\": reason}\n"
+        "        tool[\"runtime_package\"] = {\n"
+        "            \"status\": \"unverifiable\",\n"
+        "            \"version\": None,\n"
+        "            \"reason\": reason,\n"
+        "        }\n"
+        "        return tool\n"
         "    codex = shutil.which(\"codex\")\n"
         "    direct_runtime_configured = False\n"
         "    isolated_runtime_configured = False\n"
@@ -343,6 +440,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            ],\n"
         "            repository,\n"
         "            timeout_seconds,\n"
+        "            environment_overrides=environment,\n"
         "        )\n"
         "        tool[\"mcp_registration\"] = classify_ouroboros_registration(\n"
         "            registration_raw, tool[\"executable\"]\n"
@@ -354,6 +452,54 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            if isinstance(registration_result, dict)\n"
         "            else None\n"
         "        )\n"
+        "        if isinstance(registration_transport, dict):\n"
+        "            registered_env = registration_transport.get(\"env\", {})\n"
+        "            registered_home = (\n"
+        "                registered_env.get(\"CODEX_HOME\")\n"
+        "                if isinstance(registered_env, dict)\n"
+        "                else None\n"
+        "            )\n"
+        "            if codex_home is not None:\n"
+        "                if registered_home is None:\n"
+        "                    tool[\"home_binding\"] = {\n"
+        "                        \"status\": \"unverifiable\",\n"
+        "                        \"reason\": \"home_not_explicit\",\n"
+        "                    }\n"
+        "                elif (\n"
+        "                    isinstance(registered_home, str)\n"
+        "                    and Path(registered_home).is_absolute()\n"
+        "                ):\n"
+        "                    try:\n"
+        "                        matches = (\n"
+        "                            Path(registered_home).resolve() == codex_home.resolve()\n"
+        "                        )\n"
+        "                        if not matches:\n"
+        "                            try:\n"
+        "                                matches = Path(registered_home).samefile(codex_home)\n"
+        "                            except FileNotFoundError:\n"
+        "                                matches = False\n"
+        "                        tool[\"home_binding\"] = {\n"
+        "                            \"status\": \"configured\" if matches else \"degraded\",\n"
+        "                            \"reason\": \"home_matches\" if matches else \"home_mismatch\",\n"
+        "                        }\n"
+        "                    except (OSError, ValueError, RuntimeError):\n"
+        "                        tool[\"home_binding\"] = {\n"
+        "                            \"status\": \"degraded\",\n"
+        "                            \"reason\": \"home_invalid\",\n"
+        "                        }\n"
+        "                else:\n"
+        "                    tool[\"home_binding\"] = {\n"
+        "                        \"status\": \"degraded\",\n"
+        "                        \"reason\": \"home_invalid\",\n"
+        "                    }\n"
+        "            args = registration_transport.get(\"args\", [])\n"
+        "            if isinstance(args, list) and len(args) > 4 and isinstance(args[4], str):\n"
+        "                package = OUROBOROS_MCP_PACKAGE.fullmatch(args[4])\n"
+        "                if package:\n"
+        "                    tool[\"runtime_package\"] = {\n"
+        "                        \"status\": \"pinned\" if package.group(1) else \"unverifiable\",\n"
+        "                        \"version\": package.group(1),\n"
+        "                    }\n"
         "        direct_runtime_configured = tool[\"mcp_registration\"][\n"
         "            \"status\"\n"
         "        ] == \"configured\" and ouroboros_direct_launcher_matches(\n"
@@ -368,7 +514,132 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        tool[\"mcp_registration\"] = {\n"
         "            \"status\": \"unverifiable\",\n"
         "            \"probe\": skipped_probe(\"codex_executable_missing\"),\n"
-        "        }\n",
+        "        }\n"
+        "\n"
+        "    if not tool[\"installed\"]:\n"
+        "        tool[\"version_supported\"] = False\n"
+        "        tool[\"probes\"][\"version\"] = skipped_probe(\"executable_missing\")\n"
+        "        tool[\"codex_integration\"] = {\n"
+        "            \"status\": \"missing\",\n"
+        "            \"probe\": skipped_probe(\"executable_missing\"),\n"
+        "        }\n"
+        "        if isolated_runtime_configured:\n"
+        "            runtime_probe = normalized_probe(registration_raw)\n"
+        "            runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"configured\",\n"
+        "                \"probe\": runtime_probe,\n"
+        "            }\n"
+        "        elif codex:\n"
+        "            registration_reason = (\n"
+        "                tool[\"mcp_registration\"].get(\"probe\", {}).get(\"reason\")\n"
+        "            )\n"
+        "            runtime_reason = (\n"
+        "                \"registration_not_supported_launcher\"\n"
+        "                if registration_reason in {None, \"registration_mismatch\"}\n"
+        "                else registration_reason\n"
+        "            )\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"unverifiable\",\n"
+        "                \"probe\": skipped_probe(runtime_reason),\n"
+        "            }\n"
+        "        else:\n"
+        "            tool[\"mcp_runtime\"] = {\n"
+        "                \"status\": \"missing\",\n"
+        "                \"probe\": skipped_probe(\"executable_missing\"),\n"
+        "            }\n"
+        "        return tool\n"
+        "\n"
+        "    codex_doctor = run_command(\n"
+        "        [tool[\"executable\"], \"codex\", \"doctor\"],\n"
+        "        repository,\n"
+        "        timeout_seconds,\n"
+        "        environment_overrides=environment,\n"
+        "    )\n"
+        "    tool[\"codex_integration\"] = {\n"
+        "        \"status\": \"configured\" if codex_doctor[\"ok\"] else \"degraded\",\n"
+        "        \"probe\": {\n"
+        "            key: codex_doctor[key]\n"
+        "            for key in (\"attempted\", \"ok\", \"exit_code\", \"timed_out\")\n"
+        "        },\n"
+        "    }\n"
+        "\n"
+        "    if isolated_runtime_configured:\n"
+        "        runtime_probe = normalized_probe(registration_raw)\n"
+        "        runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"configured\",\n"
+        "            \"probe\": runtime_probe,\n"
+        "        }\n"
+        "    elif direct_runtime_configured:\n"
+        "        mcp_doctor = json_probe(\n"
+        "            [tool[\"executable\"], \"mcp\", \"doctor\", \"--json\"],\n"
+        "            repository,\n"
+        "            timeout_seconds,\n"
+        "            environment_overrides=environment,\n"
+        "        )\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"configured\" if mcp_doctor[\"ok\"] else \"degraded\",\n"
+        "            \"probe\": normalized_probe(mcp_doctor),\n"
+        "        }\n"
+        "    else:\n"
+        "        registration_reason = tool[\"mcp_registration\"].get(\"probe\", {}).get(\"reason\")\n"
+        "        runtime_reason = (\n"
+        "            \"registration_not_supported_launcher\"\n"
+        "            if registration_reason in {None, \"registration_mismatch\"}\n"
+        "            else registration_reason\n"
+        "        )\n"
+        "        tool[\"mcp_runtime\"] = {\n"
+        "            \"status\": \"unverifiable\",\n"
+        "            \"probe\": skipped_probe(runtime_reason),\n"
+        "        }\n"
+        "\n"
+        "    if direct_runtime_configured:\n"
+        "        tool[\"runtime_package\"] = {\"status\": \"selected_cli\", \"version\": tool[\"version\"]}\n"
+        "    if (\n"
+        "        tool[\"runtime_package\"][\"status\"] == \"pinned\"\n"
+        "        and tool[\"runtime_package\"][\"version\"] != tool[\"version\"]\n"
+        "    ):\n"
+        "        tool[\"runtime_package\"][\"status\"] = \"different\"\n"
+        "    components_ready = (\n"
+        "        tool[\"version_supported\"]\n"
+        "        and (codex_home is None or tool[\"home_binding\"][\"status\"] == \"configured\")\n"
+        "        and tool[\"codex_integration\"][\"status\"] == \"configured\"\n"
+        "        and tool[\"mcp_runtime\"][\"status\"] == \"configured\"\n"
+        "        and tool[\"mcp_registration\"][\"status\"] == \"configured\"\n"
+        "    )\n"
+        "    tool[\"status\"] = \"configured\" if components_ready else \"degraded\"\n"
+        "    return tool\n",
+        "def inspect_ouroboros(\n"
+        "    repository: Path,\n"
+        "    timeout_seconds: float,\n"
+        "    *,\n"
+        "    codex_home: Path | None = None,\n"
+        "    cli_observation: dict[str, Any] | None = None,\n"
+        ") -> dict[str, Any]:\n"
+        "    # Upstream probes the other host for the Ouroboros MCP registration and\n"
+        "    # measures per-home rules and skills, so on Claude Code the component could\n"
+        "    # never report `configured` and every design skill stayed blocked. Ouroboros\n"
+        "    # reaches this host as a plugin instead: one installation, no per-home\n"
+        "    # binding, and an MCP server the plugin registers under a plugin-scoped\n"
+        "    # name. The whole function is replaced because upstream's `codex_home`\n"
+        "    # threading, `environment_overrides`, transport parsing, and the two\n"
+        "    # launcher matchers all read locals this host cannot produce; a narrower cut\n"
+        "    # would ship NameErrors the AST gate cannot see. `codex_home` stays in the\n"
+        "    # signature because the caller contract is upstream's, and the dimension it\n"
+        "    # names is reported as absent rather than silently passing.\n"
+        "    tool = (\n"
+        "        dict(cli_observation)\n"
+        "        if cli_observation is not None\n"
+        "        else inspect_ouroboros_cli(repository, timeout_seconds)\n"
+        "    )\n"
+        "    tool[\"supported_range\"] = \">=0.51.1,<0.54.0\"\n"
+        "    tool[\"home_binding\"] = {\"status\": \"unverifiable\", \"reason\": \"home_not_applicable\"}\n"
+        "    tool[\"runtime_package\"] = {\n"
+        "        \"status\": \"unverifiable\",\n"
+        "        \"version\": None,\n"
+        "        \"reason\": \"plugin_scoped_registration\",\n"
+        "    }\n"
         "    claude = shutil.which(\"claude\")\n"
         "    if claude:\n"
         "        # Ouroboros ships its Claude Code integration as a plugin, so the MCP\n"
@@ -422,68 +693,15 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        host_integration = {\n"
         "            \"status\": \"unverifiable\",\n"
         "            \"probe\": skipped_probe(\"claude_executable_missing\"),\n"
-        "        }\n",
-    ),
-    # `ooo codex doctor` has no Claude Code counterpart, so the integration
-    # component is taken from the plugin-scoped registration above.
-    (
-        "    codex_doctor = run_command(\n"
-        "        [tool[\"executable\"], \"codex\", \"doctor\"], repository, timeout_seconds\n"
-        "    )\n"
-        "    tool[\"codex_integration\"] = {\n"
-        "        \"status\": \"configured\" if codex_doctor[\"ok\"] else \"degraded\",\n"
-        "        \"probe\": {\n"
-        "            key: codex_doctor[key]\n"
-        "            for key in (\"attempted\", \"ok\", \"exit_code\", \"timed_out\")\n"
-        "        },\n"
-        "    }\n",
-        "    # `ooo codex doctor` verifies another host's routing artifacts and has no\n"
-        "    # Claude Code counterpart. The plugin-scoped registration resolved above is\n"
-        "    # the host-integration signal here, so it is recorded rather than reprobed.\n"
-        "    tool[\"host_integration\"] = host_integration\n",
-    ),
-    # The reported component is the host's own integration here, not Codex's.
-    (
-        "        tool[\"codex_integration\"] = {\n"
-        "            \"status\": \"missing\",\n"
-        "            \"probe\": skipped_probe(\"executable_missing\"),\n"
-        "        }\n",
+        "        }\n"
+        "\n"
+        "    if not tool[\"installed\"]:\n"
+        "        tool[\"version_supported\"] = False\n"
+        "        tool[\"probes\"][\"version\"] = skipped_probe(\"executable_missing\")\n"
         "        tool[\"host_integration\"] = {\n"
         "            \"status\": \"missing\",\n"
         "            \"probe\": skipped_probe(\"executable_missing\"),\n"
-        "        }\n",
-    ),
-    # Upstream's not-installed path still classifies the MCP runtime from its
-    # Codex launcher booleans, which the probe rule above removes. A configured
-    # plugin-scoped registration proves a configured runtime even without the
-    # `ooo` CLI; with neither there is nothing to verify, so upstream's middle
-    # `elif codex:` unverifiable arm deliberately collapses into `missing`.
-    (
-        "        if isolated_runtime_configured:\n"
-        "            runtime_probe = normalized_probe(registration_raw)\n"
-        "            runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
-        "            tool[\"mcp_runtime\"] = {\n"
-        "                \"status\": \"configured\",\n"
-        "                \"probe\": runtime_probe,\n"
-        "            }\n"
-        "        elif codex:\n"
-        "            registration_reason = (\n"
-        "                tool[\"mcp_registration\"].get(\"probe\", {}).get(\"reason\")\n"
-        "            )\n"
-        "            runtime_reason = (\n"
-        "                \"registration_not_supported_launcher\"\n"
-        "                if registration_reason in {None, \"registration_mismatch\"}\n"
-        "                else registration_reason\n"
-        "            )\n"
-        "            tool[\"mcp_runtime\"] = {\n"
-        "                \"status\": \"unverifiable\",\n"
-        "                \"probe\": skipped_probe(runtime_reason),\n"
-        "            }\n"
-        "        else:\n"
-        "            tool[\"mcp_runtime\"] = {\n"
-        "                \"status\": \"missing\",\n"
-        "                \"probe\": skipped_probe(\"executable_missing\"),\n"
-        "            }\n",
+        "        }\n"
         "        if host_integration[\"status\"] == \"configured\":\n"
         "            runtime_probe = dict(host_integration[\"probe\"])\n"
         "            runtime_probe[\"reason\"] = \"plugin_launcher_configured\"\n"
@@ -495,46 +713,14 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            tool[\"mcp_runtime\"] = {\n"
         "                \"status\": \"missing\",\n"
         "                \"probe\": skipped_probe(\"executable_missing\"),\n"
-        "            }\n",
-    ),
-    # ...and the readiness rollup reads the renamed component.
-    (
-        "        and tool[\"codex_integration\"][\"status\"] == \"configured\"\n",
-        "        and tool[\"host_integration\"][\"status\"] == \"configured\"\n",
-    ),
-    # Upstream derives this component from its launcher classification and runs
-    # `ooo mcp doctor --json` only when Codex directly launches the selected
-    # executable. The plugin-scoped registration is the runtime signal here, so
-    # the doctor, which inspects the CLI's own package environment, never runs.
-    (
-        "    if isolated_runtime_configured:\n"
-        "        runtime_probe = normalized_probe(registration_raw)\n"
-        "        runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
-        "        tool[\"mcp_runtime\"] = {\n"
-        "            \"status\": \"configured\",\n"
-        "            \"probe\": runtime_probe,\n"
-        "        }\n"
-        "    elif direct_runtime_configured:\n"
-        "        mcp_doctor = json_probe(\n"
-        "            [tool[\"executable\"], \"mcp\", \"doctor\", \"--json\"],\n"
-        "            repository,\n"
-        "            timeout_seconds,\n"
-        "        )\n"
-        "        tool[\"mcp_runtime\"] = {\n"
-        "            \"status\": \"configured\" if mcp_doctor[\"ok\"] else \"degraded\",\n"
-        "            \"probe\": normalized_probe(mcp_doctor),\n"
-        "        }\n"
-        "    else:\n"
-        "        registration_reason = tool[\"mcp_registration\"].get(\"probe\", {}).get(\"reason\")\n"
-        "        runtime_reason = (\n"
-        "            \"registration_not_supported_launcher\"\n"
-        "            if registration_reason in {None, \"registration_mismatch\"}\n"
-        "            else registration_reason\n"
-        "        )\n"
-        "        tool[\"mcp_runtime\"] = {\n"
-        "            \"status\": \"unverifiable\",\n"
-        "            \"probe\": skipped_probe(runtime_reason),\n"
-        "        }\n",
+        "            }\n"
+        "        return tool\n"
+        "\n"
+        "    # `ooo codex doctor` verifies another host's routing artifacts and has no\n"
+        "    # Claude Code counterpart. The plugin-scoped registration resolved above is\n"
+        "    # the host-integration signal here, so it is recorded rather than reprobed.\n"
+        "    tool[\"host_integration\"] = host_integration\n"
+        "\n"
         "    # The plugin launches the MCP 2 server in an isolated process, the Claude\n"
         "    # analog of upstream's isolated `uvx` launcher, so the plugin-scoped\n"
         "    # registration resolved above is the runtime signal. `ooo mcp doctor`\n"
@@ -554,7 +740,21 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            \"probe\": skipped_probe(\n"
         "                registration_reason or \"registration_not_supported_launcher\"\n"
         "            ),\n"
-        "        }\n",
+        "        }\n"
+        "\n"
+        "    # Upstream reads the pinned `ouroboros-mcp` version out of the registration\n"
+        "    # transport, which a plugin-scoped entry does not print, and `home_binding`\n"
+        "    # measures a per-home contract this host does not have. Neither joins the\n"
+        "    # readiness rollup, so an absent dimension cannot mark a healthy plugin\n"
+        "    # installation degraded.\n"
+        "    components_ready = (\n"
+        "        tool[\"version_supported\"]\n"
+        "        and tool[\"host_integration\"][\"status\"] == \"configured\"\n"
+        "        and tool[\"mcp_runtime\"][\"status\"] == \"configured\"\n"
+        "        and tool[\"mcp_registration\"][\"status\"] == \"configured\"\n"
+        "    )\n"
+        "    tool[\"status\"] = \"configured\" if components_ready else \"degraded\"\n"
+        "    return tool\n",
     ),
     # Upstream installs Humanizer into the shared cross-agent root and im-not-ai
     # into the active Codex home, and `inspect_writing_skill` marks a tool ready
@@ -570,8 +770,101 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         '        expected_target=skill_roots()[0] / "humanizer",\n',
     ),
     (
-        '        expected_target=effective_codex_skill_root() / "humanize-korean",\n',
-        '        expected_target=skill_roots()[0] / "humanize-korean",\n',
+        "def inspect_im_not_ai() -> dict[str, Any]:\n"
+        "    try:\n"
+        "        target = effective_codex_skill_root() / \"humanize-korean\"\n"
+        "    except (OSError, ValueError, RuntimeError):\n"
+        "        target = None\n"
+        "    result = inspect_writing_skill(\n"
+        "        skill_name=\"humanize-korean\",\n"
+        "        expected_files=HUMANIZE_KOREAN_SKILL_FILES,\n"
+        "        expected_target=target,\n"
+        "        supported_release=IM_NOT_AI_SUPPORTED_RELEASE,\n"
+        "        require_version=False,\n"
+        "    )\n"
+        "    if target is None:\n"
+        "        result[\"reason\"] = \"home_resolution_failed\"\n"
+        "    return result\n",
+        "def inspect_im_not_ai() -> dict[str, Any]:\n"
+        "    # Upstream resolves the other host's active home and guards its expansion,\n"
+        "    # so it carries a nullable target and a `home_resolution_failed` reason.\n"
+        "    # The substituted `skill_roots()` already guards the configured root and\n"
+        "    # is never empty, so the target here is unconditional and reads exactly\n"
+        "    # like its Humanizer sibling, which is also what keeps every expected\n"
+        "    # target in this file pointing at the Claude Code root.\n"
+        "    return inspect_writing_skill(\n"
+        "        skill_name=\"humanize-korean\",\n"
+        "        expected_files=HUMANIZE_KOREAN_SKILL_FILES,\n"
+        "        expected_target=skill_roots()[0] / \"humanize-korean\",\n"
+        "        supported_release=IM_NOT_AI_SUPPORTED_RELEASE,\n"
+        "        require_version=False,\n"
+        "    )\n",
+    ),
+    # v0.1.15 added a presence-only trust table for the paired and third-party
+    # skills, hard-coded under the shared cross-agent root and, for im-not-ai,
+    # the active Codex home. Claude Code loads neither, so every one of these
+    # checks would look where this host never reads and report a correct
+    # installation as absent. `skill_roots()[0]` is the effective Claude Code
+    # root, `CLAUDE_CONFIG_DIR` included, and the same root the installation
+    # proposals target. The Python spelling carries no tilde, so the
+    # `~/.agents/skills` needle never saw these; the needle is `.agents/skills`
+    # now, which is what makes a future one abort instead of shipping.
+    (
+        "    trusted_global_skills = {\n"
+        "        name: {\n"
+        "            \"canonical_path\": str(path),\n"
+        "            \"present\": path.exists(),\n"
+        "            \"verification_scope\": \"presence_only\",\n"
+        "        }\n"
+        "        for name, path in {\n"
+        "            \"use-sanho\": Path.home() / \".agents/skills/use-sanho\",\n"
+        "            \"use-dolgorae\": Path.home() / \".agents/skills/use-dolgorae\",\n"
+        "            \"use-mulgae\": Path.home() / \".agents/skills/use-mulgae\",\n"
+        "            \"use-gaori\": Path.home() / \".agents/skills/use-gaori\",\n"
+        "            \"use-gaori-status\": Path.home() / \".agents/skills/use-gaori-status\",\n"
+        "            \"use-sorage\": Path.home() / \".agents/skills/use-sorage\",\n"
+        "            \"use-podway\": Path.home() / \".agents/skills/use-podway\",\n"
+        "            \"lore-commits\": Path.home() / \".agents/skills/lore-commits\",\n"
+        "            \"lore-query\": Path.home() / \".agents/skills/lore-query\",\n"
+        "            \"deslop\": Path.home() / \".agents/skills/deslop\",\n"
+        "            \"humanizer\": Path.home() / \".agents/skills/humanizer\",\n"
+        "            \"humanize-korean\": effective_codex_skill_root() / \"humanize-korean\",\n"
+        "        }.items()\n"
+        "    }\n",
+        "    trusted_root = skill_roots()[0]\n"
+        "    trusted_global_skills = {\n"
+        "        name: {\n"
+        "            \"canonical_path\": str(trusted_root / name),\n"
+        "            \"present\": (trusted_root / name).exists(),\n"
+        "            \"verification_scope\": \"presence_only\",\n"
+        "        }\n"
+        "        for name in (\n"
+        "            \"use-sanho\",\n"
+        "            \"use-dolgorae\",\n"
+        "            \"use-mulgae\",\n"
+        "            \"use-gaori\",\n"
+        "            \"use-gaori-status\",\n"
+        "            \"use-sorage\",\n"
+        "            \"use-podway\",\n"
+        "            \"lore-commits\",\n"
+        "            \"lore-query\",\n"
+        "            \"deslop\",\n"
+        "            \"humanizer\",\n"
+        "            \"humanize-korean\",\n"
+        "        )\n"
+        "    }\n",
+    ),
+    # Lore and Deslop discover installations by walking `skill_roots()`, which
+    # the rule above narrows to the Claude Code roots, and then require the one
+    # installation to sit at a shared-root path those roots can never produce.
+    # Left alone, both tools report `degraded` for every correct installation.
+    (
+        "        == str(Path.home() / \".agents/skills\" / name)\n",
+        "        == str(skill_roots()[0] / name)\n"
+    ),
+    (
+        "        and installations[0][\"location\"] == str(Path.home() / \".agents/skills/deslop\")\n",
+        "        and installations[0][\"location\"] == str(skill_roots()[0] / \"deslop\")\n"
     ),
     # Upstream inspects the Mulgae and Gaori MCP registrations through the Codex
     # CLI: `codex mcp get --json` from a neutral cwd for the global view, the
@@ -1101,6 +1394,193 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         '        configuration_entry(repository, ".codex/config.toml", timeout_seconds),\n',
         '        configuration_entry(repository, ".mcp.json", timeout_seconds),\n',
     ),
+    # `inspect_ouroboros.py` measures per-home rules, skills, and MCP registration
+    # for the other host and is excluded, so the import that would fail at startup
+    # goes with it, and the bundled development channel's component leaves the
+    # catalog rather than probing an installer this artifact does not ship.
+    # Ouroboros itself stays: the shrunken component below calls the project
+    # inspector's plugin-scoped probe.
+    (
+        "from inspect_ouroboros import InvalidCodexHome, inspect_ouroboros\n",
+        "",
+    ),
+    (
+        "    \"podway\",\n"
+        "    \"ouroboros\",\n"
+        "    \"aquarium-dev\",\n"
+        ")\n",
+        "    \"podway\",\n"
+        "    \"ouroboros\",\n"
+        ")\n",
+    ),
+    # Upstream's canonical location for a paired skill is the shared cross-agent
+    # root, which Claude Code never loads: every correct installation would be
+    # reported as absent from its canonical path and degraded. `skill_roots()[0]`
+    # is the effective Claude Code root the installation proposals also target.
+    (
+        "    canonical_path = Path.home() / \".agents/skills\" / name\n",
+        "    canonical_path = inspector.skill_roots()[0] / name\n",
+    ),
+    # Upstream reads the user-scope MCP registration through the other host's CLI.
+    # Claude Code keeps it in its own configuration, which the project inspector
+    # already reads for all three scopes without starting a server, so the global
+    # view is that read's user-scope entry and no second probe is needed.
+    (
+        "def inspect_global_mcp(\n"
+        "    inspector: Any,\n"
+        "    name: str,\n"
+        "    executable: str | None,\n"
+        "    root: Path,\n"
+        "    timeout_seconds: float,\n"
+        ") -> dict[str, Any]:\n"
+        "    codex = inspector.shutil.which(\"codex\")\n"
+        "    if not codex:\n"
+        "        return {\"status\": \"unavailable\", \"reason\": \"codex_executable_missing\"}\n"
+        "    neutral_cwd = Path(root.anchor)\n"
+        "    raw, probe = inspector.mcp_registration_probe(\n"
+        "        codex, name, neutral_cwd, timeout_seconds\n"
+        "    )\n"
+        "    if name == \"mulgae\":\n"
+        "        return inspector.classify_mulgae_mcp_scope(\n"
+        "            raw, probe, executable, root, \"global\"\n"
+        "        )\n"
+        "    return inspector.classify_gaori_mcp_scope(raw, probe, executable, root, \"global\")\n",
+        "def inspect_global_mcp(\n"
+        "    inspector: Any,\n"
+        "    name: str,\n"
+        "    executable: str | None,\n"
+        "    root: Path,\n"
+        "    timeout_seconds: float,\n"
+        ") -> dict[str, Any]:\n"
+        "    registration = inspector.inspect_claude_mcp(name, root, executable, timeout_seconds)\n"
+        "    return registration[\"global\"]\n",
+    ),
+    # The per-home options name a dimension this host does not have. They are
+    # removed from the signature, the parser, and the call site together, so the
+    # generated-script arity gate proves no caller was left behind.
+    (
+        "    components: tuple[str, ...] | None = None,\n"
+        "    codex_homes: tuple[str, ...] = (),\n"
+        "    verify_ouroboros_release: bool = False,\n"
+        ") -> dict[str, Any]:\n",
+        "    components: tuple[str, ...] | None = None,\n"
+        ") -> dict[str, Any]:\n",
+    ),
+    # Ouroboros reaches this host as a Claude Code plugin: one installation, no
+    # per-home rules, skills, or registration, and an MCP server the plugin
+    # launches under a plugin-scoped name. The project inspector's
+    # `inspect_ouroboros` is exactly that probe, so the component keeps a real
+    # diagnosis while the excluded per-home module and its release comparison go.
+    (
+        "    if \"ouroboros\" in requested_components:\n"
+        "        try:\n"
+        "            tools[\"ouroboros\"] = inspect_ouroboros(\n"
+        "                inspector,\n"
+        "                neutral_cwd,\n"
+        "                timeout_seconds,\n"
+        "                codex_homes,\n"
+        "                verify_ouroboros_release,\n"
+        "            )\n"
+        "        except InvalidCodexHome as error:\n"
+        "            raise InspectionError(\n"
+        "                \"invalid_codex_home\", \"Codex home is unavailable or invalid\"\n"
+        "            ) from error\n",
+        "    if \"ouroboros\" in requested_components:\n"
+        "        tools[\"ouroboros\"] = inspector.inspect_ouroboros(neutral_cwd, timeout_seconds)\n",
+    ),
+    (
+        "    if \"aquarium-dev\" in requested_components:\n"
+        "        script = Path(__file__).resolve().parents[3] / \"tools/aquarium-dev/install.py\"\n"
+        "        try:\n"
+        "            probe = subprocess.run(\n"
+        "                [sys.executable, \"-B\", str(script), \"diagnose\"],\n"
+        "                cwd=neutral_cwd,\n"
+        "                capture_output=True,\n"
+        "                text=True,\n"
+        "                timeout=timeout_seconds,\n"
+        "                check=False,\n"
+        "            )\n"
+        "            if probe.returncode:\n"
+        "                failure = {\n"
+        "                    \"status\": \"unverifiable\",\n"
+        "                    \"reason\": \"probe_failed\",\n"
+        "                    \"exit_code\": probe.returncode,\n"
+        "                    \"problem\": probe.stderr.strip(),\n"
+        "                }\n"
+        "                try:\n"
+        "                    failure[\"diagnostic\"] = json.loads(probe.stderr)\n"
+        "                except ValueError:\n"
+        "                    pass\n"
+        "                tools[\"aquarium-dev\"] = failure\n"
+        "            else:\n"
+        "                tools[\"aquarium-dev\"] = json.loads(probe.stdout)\n"
+        "        except subprocess.TimeoutExpired as error:\n"
+        "            tools[\"aquarium-dev\"] = {\n"
+        "                \"status\": \"unverifiable\",\n"
+        "                \"reason\": \"probe_timeout\",\n"
+        "                \"timeout_seconds\": timeout_seconds,\n"
+        "                \"problem\": str(error),\n"
+        "            }\n"
+        "        except (OSError, ValueError, subprocess.SubprocessError) as error:\n"
+        "            tools[\"aquarium-dev\"] = {\n"
+        "                \"status\": \"unverifiable\",\n"
+        "                \"reason\": \"invalid_json\"\n"
+        "                if isinstance(error, ValueError)\n"
+        "                else \"probe_failed\",\n"
+        "                \"problem\": str(error),\n"
+        "            }\n",
+        "",
+    ),
+    (
+        "    parser.add_argument(\n"
+        "        \"--codex-home\",\n"
+        "        action=\"append\",\n"
+        "        default=[],\n"
+        "        help=\"Additional Ouroboros Codex home to inspect; repeat for multiple homes\",\n"
+        "    )\n"
+        "    parser.add_argument(\n"
+        "        \"--verify-ouroboros-release\",\n"
+        "        action=\"store_true\",\n"
+        "        help=\"Compare Ouroboros with official PyPI stable releases\",\n"
+        "    )\n",
+        "",
+    ),
+    (
+        "    if any(not value.strip() for value in arguments.codex_home):\n"
+        "        raise InspectionError(\"invalid_arguments\", \"--codex-home must not be blank\")\n",
+        "",
+    ),
+    (
+        "    if (\n"
+        "        arguments.codex_home or arguments.verify_ouroboros_release\n"
+        "    ) and \"ouroboros\" not in selected_components:\n"
+        "        raise InspectionError(\n"
+        "            \"invalid_arguments\", \"Ouroboros options require the ouroboros component\"\n"
+        "        )\n",
+        "",
+    ),
+    (
+        "                arguments.include_sorage_initialization,\n"
+        "                arguments.component,\n"
+        "                tuple(arguments.codex_home),\n"
+        "                arguments.verify_ouroboros_release,\n",
+        "                arguments.include_sorage_initialization,\n"
+        "                arguments.component,\n",
+    ),
+    # `subprocess` had exactly one user in this module, the development-channel
+    # component removed above, and an unused import is the visible residue of a
+    # block rule that deleted more than its own anchor.
+    (
+        "import importlib.util\n"
+        "import json\n"
+        "import math\n"
+        "import subprocess\n"
+        "import sys\n",
+        "import importlib.util\n"
+        "import json\n"
+        "import math\n"
+        "import sys\n",
+    ),
     # `hooks/task_commit_gate.py` names the remediation skill in the text the
     # user sees when a commit is denied. Markdown rules do not reach `.py`.
     ("$aquarium:", "/aquarium:"),
@@ -1165,7 +1645,7 @@ FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("$orca-cli", "add a substitution rule"),
     ("request_user_input", "add a substitution rule or an override"),
     ("--agent codex", "add a substitution rule or an override"),
-    ("~/.agents/skills", "Claude Code loads ~/.claude/skills; add a substitution rule"),
+    (".agents/skills", "Claude Code loads ~/.claude/skills; add a substitution rule"),
     ("${PLUGIN_ROOT}", "Claude Code expands ${CLAUDE_PLUGIN_ROOT}; add a data substitution"),
     (".codex/config", "Claude Code registers MCP servers in .claude.json and .mcp.json; add a substitution rule"),
     ("Codex", "add a substitution rule, an override, or a reviewed exemption"),
@@ -1234,6 +1714,8 @@ def require_upstream() -> None:
         if not (UPSTREAM_PLUGIN / name).is_dir():
             raise SyncError(f"upstream is missing `{name}/`; refusing to generate")
     check_upstream_directories()
+    check_upstream_files()
+    check_excluded_plugin_root()
 
 
 def check_upstream_directories() -> None:
@@ -1243,7 +1725,11 @@ def check_upstream_directories() -> None:
     appeared upstream and was dropped in silence. Whether a new directory belongs
     in a Claude artifact is a decision, and skipping it is not a safe default.
     """
-    known = set(COPIED_DIRECTORIES) | {".codex-plugin"}
+    known = (
+        set(COPIED_DIRECTORIES)
+        | {".codex-plugin"}
+        | {name for name, _reason in EXCLUDED_PLUGIN_ROOT}
+    )
     unknown = sorted(
         path.name
         for path in UPSTREAM_PLUGIN.iterdir()
@@ -1255,6 +1741,47 @@ def check_upstream_directories() -> None:
             + ", ".join(unknown)
             + "; add them to COPIED_DIRECTORIES or exclude them deliberately"
         )
+
+
+def check_upstream_files() -> None:
+    """Refuse to generate when upstream grows a plugin-root file nobody decided about.
+
+    `check_upstream_directories` filters on `path.is_dir()`, and nothing copies a
+    top-level file, so v0.1.15's `.mcp.json` would have vanished without a word:
+    the same failure class the `hooks/` incident closed for directories, still
+    open for files. Whether a plugin-root file belongs in a Claude Code artifact
+    is a decision, and a file that reaches the generated tree needs a copier
+    written for it rather than a silent default. The test is `not is_dir()` rather
+    than `is_file()`, so it partitions the plugin root with the directory scan and
+    an entry that is neither — a broken symlink — cannot fall between them.
+    """
+    known = {name for name, _reason in EXCLUDED_PLUGIN_ROOT}
+    unknown = sorted(
+        path.name
+        for path in UPSTREAM_PLUGIN.iterdir()
+        if not path.is_dir() and path.name not in known
+    )
+    if unknown:
+        raise SyncError(
+            "upstream has plugin-root files this transformation does not handle: "
+            + ", ".join(unknown)
+            + "; copy them deliberately or exclude them deliberately"
+        )
+
+
+def check_excluded_plugin_root() -> None:
+    """Refuse a plugin-root exclusion whose target no longer exists upstream.
+
+    Same contract as `check_excluded_files`: an exclusion that quietly stops
+    applying would hide a differently named replacement behind a decision nobody
+    made. The entry may name a directory or a file, so both shapes count.
+    """
+    for name, _reason in EXCLUDED_PLUGIN_ROOT:
+        if not (UPSTREAM_PLUGIN / name).exists():
+            raise SyncError(
+                f"plugin-root exclusion targets `{name}`, which no longer exists "
+                "upstream; remove the exclusion or retarget it"
+            )
 
 
 def check_excluded_files() -> None:
@@ -1788,6 +2315,7 @@ def write_sync_manifest(
         },
         "overrides": overrides,
         "excluded": excluded,
+        "excluded_plugin_root": [name for name, _reason in EXCLUDED_PLUGIN_ROOT],
         "additions": additions,
         "argument_hints": dict(sorted(ARGUMENT_HINTS.items())),
         "files": files,
@@ -1883,7 +2411,8 @@ def main() -> int:
     print(f"generated {len(skills)} skills from upstream {commit[:9]}")
     print(f"  {gated} gated against model invocation, {len(skills) - gated} model-invocable")
     print(
-        f"  {len(overrides)} overrides applied, {len(EXCLUDED_FILES)} upstream files excluded, "
+        f"  {len(overrides)} overrides applied, "
+        f"{len(EXCLUDED_FILES) + len(EXCLUDED_PLUGIN_ROOT)} upstream entries excluded, "
         f"{len(ADDED_PATHS)} host-only files added"
     )
     return 0
