@@ -7,6 +7,7 @@ This file records concise shipped outcomes of the Aquarium for Claude edition. R
 ### Added
 
 - Carry the `mulgae-review` argument hint `<target> [task-or-epic-id]`, the vocabulary its two standalone siblings already use, so the new report-only Mulgae entry point shows its arguments in the slash menu.
+- Guard the README Skills table. Nothing checked README prose against the artifact beyond the override table, so a skill upstream adds could ship without a row; `tests/validate.rb` now requires a row for every generated top-level skill, exempting only the seven `task-*` phase skills the prose beside `task-handler` describes, and requires each exempted name to still be a generated skill.
 
 ### Changed
 

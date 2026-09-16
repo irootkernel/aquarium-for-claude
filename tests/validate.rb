@@ -533,6 +533,19 @@ assert(
   "README override table #{override_rows.inspect} does not match the applied overrides #{sync_manifest.fetch('overrides').inspect}"
 )
 
+# The Skills table is the README's public index of what the plugin ships. A
+# skill upstream adds arrives through generation with no prose of its own —
+# v0.1.16's `mulgae-review` did — so every generated top-level skill must have
+# a row. The seven `task-*` phase skills are described once in the prose beside
+# `task-handler` and are exempt, and each exempted name must still be a
+# generated skill so the exemption cannot outlive a rename.
+PHASE_SKILLS = %w[task-plan task-implement task-refine task-verify task-document task-review task-close].freeze
+generated_skills = skill_paths.map { |p| p.dirname.basename.to_s }
+assert((PHASE_SKILLS - generated_skills).empty?, "phase-skill exemptions name skills that are not generated: #{(PHASE_SKILLS - generated_skills).inspect}")
+skill_rows = readme.scan(/^\| `([a-z0-9-]+)` \| /).flatten
+missing_rows = generated_skills - PHASE_SKILLS - skill_rows
+assert(missing_rows.empty?, "README Skills table lacks a row for generated skills: #{missing_rows.inspect}")
+
 # --- documentation convention ----------------------------------------------
 
 # The convention is this repository's, so it is asserted on the Markdown this
