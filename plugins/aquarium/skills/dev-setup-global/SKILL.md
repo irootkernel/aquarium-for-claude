@@ -1,12 +1,18 @@
 ---
 name: dev-setup-global
-description: "Diagnose, install, and update Aquarium user-global development tools. Use when the user invokes /aquarium:dev-setup-global or a workflow reports a missing global CLI, paired skill, global MCP registration, service, Lore, Deslop, Humanizer, im-not-ai, or Ouroboros component. Use /aquarium:dev-setup for repository-local configuration."
+description: "Diagnose, install, and update supported user-global development tools and integrations. Excludes Aquarium plugin installation or updates. Use when the user invokes /aquarium:dev-setup-global or a workflow reports a missing global CLI, paired skill, global MCP registration, service, Lore, Deslop, Humanizer, im-not-ai, or Ouroboros component. Use /aquarium:dev-setup for repository-local configuration."
 disable-model-invocation: true
 ---
 
 # Global Development Setup
 
-Own user-global installation, exact-upstream freshness, upgrades, and services without inspecting or changing repository configuration.
+Own installation, exact-upstream freshness, upgrades, and services for the supported components listed below without inspecting or changing repository configuration.
+
+## Check Request Scope Before Loading References
+
+Aquarium plugin installation and updates belong to Claude Code's own plugin management — `claude plugin marketplace update aquarium-for-claude` and `claude plugin update aquarium@aquarium-for-claude`, or `/plugin` inside a session. A request to install or update only the Aquarium plugin, including a specific version, does not select this skill. If this skill was selected for that request, return to that flow before reading the tool catalog or running any diagnostic. Do not infer a global tool setup request from plugin installation.
+
+Use this skill for an explicit global development setup request or a workflow continuation naming a global component that needs attention.
 
 Read the selected sections of [the shared tool catalog](../../references/tool-catalog.md). Do not read repository-local `.podway`, `.mulgae`, `.gaori`, `.sorage`, `.mcp.json`, AGENTS.md, or CLAUDE.md as global setup evidence.
 
@@ -31,7 +37,7 @@ If a freshness lookup, download, validation, or comparison fails, report `freshn
 - Podway's per-user production daemon and Sorage's minimal user-global initialization.
 - Lora's `lore-commits` and `lore-query`, upstream Deslop, Humanizer, and im-not-ai's `humanize-korean`, `humanize`, and `humanize-redo` under that same skill root, with the four subagents im-not-ai's installer selects by default under the matching `agents/` directory.
 - The Ouroboros CLI and its configuration. Its Claude Code integration arrives as a plugin rather than as per-home rules, skills, and MCP registration, so the component here is one installation: `--component ouroboros` reports the CLI version and the plugin-scoped MCP registration through the project inspector's probe, and there is no per-home readiness, home binding, MCP package pin, or release comparison to diagnose. Installing or upgrading the plugin itself belongs to `claude plugin`, not to this skill.
-- Aquarium production-binary readiness requires supported global Podway, Mulgae, and Gaori executables and fails closed when any is missing. Sanho remains optional and is excluded from this baseline, and so is Dolgorae: no skill in this artifact routes a review through it, so its readiness is reported as third-party rather than gating Aquarium.
+- Aquarium production-binary readiness requires supported global Podway, Mulgae, and Gaori executables and fails closed when any is missing. Dolgorae and Sanho remain optional and are excluded from this baseline. No skill in this artifact routes a review through Dolgorae, so its readiness is reported as third-party rather than gating Aquarium.
 
 Do not install provider CLIs, authenticate, read credentials, contact providers, transmit repository source, initialize repository workspaces, change project MCP, edit repository guidance, start tests or reviews, or invoke Ouroboros workflows.
 

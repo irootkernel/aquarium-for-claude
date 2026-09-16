@@ -85,6 +85,7 @@ ARGUMENT_HINTS: dict[str, str] = {
     "release-qa": "[version]",
     "dev-setup-bundle": "<manifest-path>",
     "independent-review": "<target> [task-or-epic-id]",
+    "mulgae-review": "<target> [task-or-epic-id]",
     "orca-review": "<target> [task-or-epic-id]",
 }
 
@@ -105,7 +106,8 @@ EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
         "v0.1.14; that backend runs a fresh Codex Reviewer, this artifact's "
         "independent review dispatches host subagents instead, and its Orca review "
         "is forbidden to use Dolgorae, so no skill here routes through it and the "
-        "contract would document a lifecycle this edition does not have",
+        "contract would document a lifecycle this edition does not have; upstream "
+        "disabled that route in v0.1.16 and this edition's route never used it",
     ),
     (
         "references/development-contract.md",
@@ -163,30 +165,40 @@ EXCLUDED_PLUGIN_ROOT: tuple[tuple[str, str], ...] = (
 # corrupt into "nested CLAUDE.md, CLAUDE.md". Instruction-file wording is
 # handled by full-file overrides instead.
 SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
-    # Upstream sends a caller who needs `workspace` or `dirty` to independent
-    # review, which is true there because its independent review has Dolgorae's
-    # immutable capture. Here neither backend has one, so both scopes are
-    # unsupported on both paths and the referral is a circle. Deleting exactly
-    # the referral leaves the exclusion itself, which is correct. The anchor
-    # holds an unsubstituted sigil, so this rule must run before the
-    # `$aquarium:` rule.
+    # Upstream v0.1.16 disabled its Dolgorae-backed Independent Review and this
+    # sentence now says so directly. This edition keeps Independent Review live
+    # on host subagents, but that backend holds no immutable capture either, so
+    # it is still not a fallback for the two capture-only scopes; the
+    # replacement keeps the exclusion and says why in this edition's own terms.
     (
-        "`workspace` and `dirty` remain outside this workflow. Use "
-        "`$aquarium:independent-review` when one of those scopes is required. "
-        "Never stage paths merely to manufacture an Orca Review target.",
-        "`workspace` and `dirty` remain outside this workflow. "
-        "Never stage paths merely to manufacture an Orca Review target.",
+        "`workspace` and `dirty` remain outside this workflow. Report the unsupported Orca scope and ask for an explicitly selected supported target or review route; Independent Review is disabled and is not a fallback. Never stage paths or reinterpret state merely to manufacture an Orca Review target.",
+        "`workspace` and `dirty` remain outside this workflow. Report the unsupported Orca scope and ask for an explicitly selected supported target or review route; Independent Review does not support those scopes either and is not a fallback. Never stage paths or reinterpret state merely to manufacture an Orca Review target.",
+    ),
+    # The shared disposition contract lists every route that can still deliver
+    # findings now that upstream v0.1.16 disabled its Dolgorae-backed
+    # Independent Review, and it routes a caller to an explicitly selected
+    # "native Codex" (host-native) subagent instead. On this host Independent
+    # Review IS that native subagent route and stays enabled, so the contract
+    # names it directly rather than describing it as disabled or dormant. The
+    # first anchor still holds unsubstituted `$aquarium:` sigils, so this pair
+    # must run before the `$aquarium:` rule.
+    (
+        "The disabled `$aquarium:independent-review` route itself only reports its refusal and alternative guidance; that refusal launches nothing. Exactly one explicitly preselected supported Orca or native Codex alternative may run only under its own contract, and native Codex additionally requires host fresh delegation. Multiple preselected alternatives require the user to choose one before anything launches. A direct `$aquarium:task-review`, standalone `$aquarium:mulgae-review`, or standalone `$aquarium:orca-review` is report-only.",
+        "A standalone `/aquarium:independent-review` dispatches fresh read-only reviewer subagents through this host's own subagent mechanism under its own contract. A direct `/aquarium:task-review` or a standalone `/aquarium:independent-review`, `/aquarium:mulgae-review`, or `/aquarium:orca-review` is report-only.",
+    ),
+    (
+        "from Mulgae Review, Orca Review, an explicitly selected native Codex review subagent, or the dormant Independent Review contract if that route is re-enabled.",
+        "from Mulgae Review, Orca Review, or Independent Review through this host's own reviewer subagents.",
     ),
     ("$aquarium:", "/aquarium:"),
-    # The shared disposition contract describes re-review after remediation in
-    # terms of each backend's target acquisition. This artifact's independent
-    # review captures nothing — it dispatches subagents that read the live
-    # target, exactly as Orca's reviewer does — so upstream's grouping is false
-    # here and would have a coordinator look for capture evidence that never
-    # exists.
+    # The shared disposition contract now credits re-review after remediation
+    # to Independent Review and Orca alike, and hedges only for a dormant
+    # Independent Review upstream could re-enable. This edition's Independent
+    # Review reads the live target exactly as Orca's reviewer does, so it is
+    # never dormant here and upstream's hedge is false in this artifact.
     (
-        "Independent Review and Mulgae create fresh native captures. Orca reads the corrected live target.",
-        "Mulgae creates a fresh native capture. Independent Review and Orca read the corrected live target.",
+        "Mulgae creates a fresh native capture, and Orca reads the corrected live target. Independent Review would require a fresh capture if separately re-enabled.",
+        "Mulgae creates a fresh native capture, and Independent Review and Orca read the corrected live target.",
     ),
     # `$use-podway`, `$use-sanho`, `$use-mulgae`, `$use-gaori`. A prefix rule
     # covers the family and any later sibling; `/use-` cannot re-match it.
@@ -311,43 +323,44 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            pass\n"
         "    candidates.append(Path.home().joinpath(\".claude/skills\"))\n",
     ),
-    # `claude mcp get` reports a definite not-found on stderr as `No MCP server
-    # named "<name>". Configured servers: ...`, which carries neither the
-    # `Error:` prefix nor the ` found.` tail the shared matcher requires, so the
-    # missing case would degrade instead of naming itself. The rewrite stays
-    # local to the Ouroboros call site: upstream v0.1.10 moved the regex into
-    # `named_mcp_server_missing`, which the Mulgae and Gaori inspectors call as
-    # well, and a helper-wide rewrite would change their classification too.
+    # Upstream v0.1.16 restructured `classify_ouroboros_registration`'s failure
+    # branch around a `presence` key that only its own `mcp_registration_probe`
+    # sets, which broke both of this edition's separate block anchors inside
+    # it. `claude mcp get` still prints a human-readable block rather than
+    # typed JSON, so the Claude replacement still reads a definite not-found
+    # from stderr and health from the `Status:` line rather than from
+    # `presence`. The two former anchors are collapsed into one whole-function
+    # rule so the next upstream reshuffle fails loudly instead of drifting.
     (
-        "        not_found = named_mcp_server_missing(raw_probe, \"ouroboros\")\n",
-        "        # `claude mcp get` reports a definite not-found on stderr as `No MCP\n"
-        "        # server named \"<name>\". Configured servers: ...`, without the `Error:`\n"
-        "        # prefix or the ` found.` tail the shared matcher requires, so the\n"
-        "        # missing case would degrade instead of naming itself. The match stays\n"
-        "        # local to this call site because the shared helper also serves the\n"
-        "        # Mulgae and Gaori inspectors.\n"
-        "        not_found = bool(\n"
-        "            raw_probe[\"exit_code\"] == 1\n"
-        "            and not raw_probe[\"timed_out\"]\n"
-        "            and not raw_probe.get(\"stdout\", \"\").strip()\n"
-        "            and re.match(\n"
-        "                r\"No MCP server named ['\\\"]?[^'\\\"]+['\\\"]?\\.\",\n"
-        "                raw_probe.get(\"stderr\", \"\").strip(),\n"
-        "            )\n"
-        "        )\n",
-    ),
-    # The Codex probe returns typed JSON whose transport upstream compares, via
-    # the v0.1.13 direct and isolated launcher matchers, against its supported
-    # launch shapes; the Claude probe returns a rendered block, so the
-    # enabled/disabled decision moves to its `Status:` line and the matchers
-    # stay defined but uncalled.
-    (
-        "    parsed = parse_json_probe(raw_probe)\n"
-        "    if parsed.get(\"error_code\") == \"invalid_json\":\n"
-        "        probe[\"error_code\"] = \"invalid_json\"\n"
-        "        probe[\"reason\"] = \"registration_invalid_json\"\n"
-        "        return {\"status\": \"degraded\", \"probe\": probe}\n"
-        "    result = parsed.get(\"result\")\n"
+        "def classify_ouroboros_registration(\n"
+        "    registration_probe: dict[str, Any], ouroboros_executable: str | None\n"
+        ") -> dict[str, Any]:\n"
+        "    probe = {\n"
+        "        key: registration_probe[key]\n"
+        "        for key in (\"attempted\", \"ok\", \"exit_code\", \"timed_out\")\n"
+        "    }\n"
+        "    if not registration_probe[\"ok\"]:\n"
+        "        missing = registration_probe.get(\"presence\") == \"missing\"\n"
+        "        if registration_probe.get(\"error_code\") and (\n"
+        "            registration_probe[\"error_code\"] != \"invalid_json\"\n"
+        "            or registration_probe.get(\"response_invalid\")\n"
+        "        ):\n"
+        "            probe[\"error_code\"] = registration_probe[\"error_code\"]\n"
+        "        probe[\"reason\"] = (\n"
+        "            \"registration_not_found\"\n"
+        "            if missing\n"
+        "            else \"registration_probe_timed_out\"\n"
+        "            if registration_probe[\"timed_out\"]\n"
+        "            else \"registration_invalid_json\"\n"
+        "            if registration_probe.get(\"response_invalid\")\n"
+        "            else \"registration_probe_failed\"\n"
+        "        )\n"
+        "        return {\n"
+        "            \"status\": \"missing\" if missing else \"degraded\",\n"
+        "            \"probe\": probe,\n"
+        "        }\n"
+        "\n"
+        "    result = registration_probe.get(\"result\")\n"
         "    if not isinstance(result, dict):\n"
         "        probe[\"reason\"] = \"registration_result_invalid\"\n"
         "        return {\"status\": \"degraded\", \"probe\": probe}\n"
@@ -374,6 +387,46 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    else:\n"
         "        probe[\"reason\"] = \"registration_enabled_invalid\"\n"
         "    return {\"status\": \"degraded\", \"probe\": probe}\n",
+        "def classify_ouroboros_registration(\n"
+        "    registration_probe: dict[str, Any], ouroboros_executable: str | None\n"
+        ") -> dict[str, Any]:\n"
+        "    # `claude mcp get` prints a human-readable block rather than typed JSON,\n"
+        "    # and this host has no structural inventory that proves absence: `claude\n"
+        "    # mcp list` health-checks every approved server and so starts it. The\n"
+        "    # definite not-found is still read from stderr (`No MCP server named\n"
+        "    # \"<name>\". Configured servers: ...`) and health from the `Status:` line;\n"
+        "    # the transport fields upstream compares are absent for a plugin-scoped\n"
+        "    # server, so `ouroboros_executable` cannot be compared.\n"
+        "    probe = {\n"
+        "        key: registration_probe[key]\n"
+        "        for key in (\"attempted\", \"ok\", \"exit_code\", \"timed_out\")\n"
+        "    }\n"
+        "    if registration_probe[\"timed_out\"]:\n"
+        "        probe[\"reason\"] = \"registration_probe_timed_out\"\n"
+        "        return {\"status\": \"degraded\", \"probe\": probe}\n"
+        "    if registration_probe.get(\"error_code\"):\n"
+        "        probe[\"error_code\"] = registration_probe[\"error_code\"]\n"
+        "        probe[\"reason\"] = \"registration_probe_failed\"\n"
+        "        return {\"status\": \"degraded\", \"probe\": probe}\n"
+        "\n"
+        "    if not registration_probe[\"ok\"]:\n"
+        "        not_found = bool(\n"
+        "            registration_probe[\"exit_code\"] == 1\n"
+        "            and not registration_probe[\"timed_out\"]\n"
+        "            and not registration_probe.get(\"stdout\", \"\").strip()\n"
+        "            and re.match(\n"
+        "                r\"No MCP server named ['\\\"]?[^'\\\"]+['\\\"]?\\.\",\n"
+        "                registration_probe.get(\"stderr\", \"\").strip(),\n"
+        "            )\n"
+        "        )\n"
+        "        probe[\"reason\"] = (\n"
+        "            \"registration_not_found\" if not_found else \"registration_probe_failed\"\n"
+        "        )\n"
+        "        return {\n"
+        "            \"status\": \"missing\" if not_found else \"degraded\",\n"
+        "            \"probe\": probe,\n"
+        "        }\n"
+        "\n"
         "    # `claude mcp get` prints a human-readable block rather than typed JSON, so\n"
         "    # the registration is read from its `Status:` line. A server that resolves\n"
         "    # but cannot connect is registered and unhealthy, not unregistered. The\n"
@@ -381,7 +434,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    # which prints only `Scope:` and `Status:`, so `ouroboros_executable` cannot\n"
         "    # be compared here.\n"
         "    status_line = \"\"\n"
-        "    for line in raw_probe.get(\"stdout\", \"\").splitlines():\n"
+        "    for line in registration_probe.get(\"stdout\", \"\").splitlines():\n"
         "        stripped = line.strip()\n"
         "        if stripped.startswith(\"Status:\"):\n"
         "            status_line = stripped\n"
@@ -430,23 +483,17 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    direct_runtime_configured = False\n"
         "    isolated_runtime_configured = False\n"
         "    if codex:\n"
-        "        registration_raw = run_command(\n"
-        "            [\n"
-        "                str(Path(codex).resolve()),\n"
-        "                \"mcp\",\n"
-        "                \"get\",\n"
-        "                \"ouroboros\",\n"
-        "                \"--json\",\n"
-        "            ],\n"
+        "        registration_probe = mcp_registration_probe(\n"
+        "            str(Path(codex).resolve()),\n"
+        "            \"ouroboros\",\n"
         "            repository,\n"
         "            timeout_seconds,\n"
-        "            environment_overrides=environment,\n"
+        "            environment,\n"
         "        )\n"
         "        tool[\"mcp_registration\"] = classify_ouroboros_registration(\n"
-        "            registration_raw, tool[\"executable\"]\n"
+        "            registration_probe, tool[\"executable\"]\n"
         "        )\n"
-        "        parsed_registration = parse_json_probe(registration_raw)\n"
-        "        registration_result = parsed_registration.get(\"result\")\n"
+        "        registration_result = registration_probe.get(\"result\")\n"
         "        registration_transport = (\n"
         "            registration_result.get(\"transport\")\n"
         "            if isinstance(registration_result, dict)\n"
@@ -524,7 +571,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            \"probe\": skipped_probe(\"executable_missing\"),\n"
         "        }\n"
         "        if isolated_runtime_configured:\n"
-        "            runtime_probe = normalized_probe(registration_raw)\n"
+        "            runtime_probe = normalized_probe(registration_probe)\n"
         "            runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
         "            tool[\"mcp_runtime\"] = {\n"
         "                \"status\": \"configured\",\n"
@@ -565,7 +612,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    }\n"
         "\n"
         "    if isolated_runtime_configured:\n"
-        "        runtime_probe = normalized_probe(registration_raw)\n"
+        "        runtime_probe = normalized_probe(registration_probe)\n"
         "        runtime_probe[\"reason\"] = \"isolated_launcher_configured\"\n"
         "        tool[\"mcp_runtime\"] = {\n"
         "            \"status\": \"configured\",\n"
@@ -772,7 +819,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     (
         "def inspect_im_not_ai() -> dict[str, Any]:\n"
         "    try:\n"
-        "        target = effective_codex_skill_root() / \"humanize-korean\"\n"
+        "        target = Path.home() / \".agents/skills/humanize-korean\"\n"
         "    except (OSError, ValueError, RuntimeError):\n"
         "        target = None\n"
         "    result = inspect_writing_skill(\n"
@@ -786,12 +833,12 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        result[\"reason\"] = \"home_resolution_failed\"\n"
         "    return result\n",
         "def inspect_im_not_ai() -> dict[str, Any]:\n"
-        "    # Upstream resolves the other host's active home and guards its expansion,\n"
-        "    # so it carries a nullable target and a `home_resolution_failed` reason.\n"
-        "    # The substituted `skill_roots()` already guards the configured root and\n"
-        "    # is never empty, so the target here is unconditional and reads exactly\n"
-        "    # like its Humanizer sibling, which is also what keeps every expected\n"
-        "    # target in this file pointing at the Claude Code root.\n"
+        "    # Upstream v0.1.16 hard-codes the shared cross-agent root regardless of\n"
+        "    # `CODEX_HOME`, still unreachable here. The substituted `skill_roots()`\n"
+        "    # already guards the configured root and is never empty, so the target\n"
+        "    # here stays unconditional and reads exactly like its Humanizer sibling,\n"
+        "    # which is also what keeps every expected target in this file pointing at\n"
+        "    # the Claude Code root.\n"
         "    return inspect_writing_skill(\n"
         "        skill_name=\"humanize-korean\",\n"
         "        expected_files=HUMANIZE_KOREAN_SKILL_FILES,\n"
@@ -828,7 +875,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            \"lore-query\": Path.home() / \".agents/skills/lore-query\",\n"
         "            \"deslop\": Path.home() / \".agents/skills/deslop\",\n"
         "            \"humanizer\": Path.home() / \".agents/skills/humanizer\",\n"
-        "            \"humanize-korean\": effective_codex_skill_root() / \"humanize-korean\",\n"
+        "            \"humanize-korean\": Path.home() / \".agents/skills/humanize-korean\",\n"
         "        }.items()\n"
         "    }\n",
         "    trusted_root = skill_roots()[0]\n"
@@ -920,11 +967,11 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            version_probe[\"stdout\"]\n"
         "        )\n"
         "    neutral_cwd = Path(repository.anchor)\n"
-        "    global_raw, global_probe = mcp_registration_probe(\n"
+        "    global_probe = mcp_registration_probe(\n"
         "        codex_executable, \"mulgae\", neutral_cwd, timeout_seconds\n"
         "    )\n"
         "    global_registration = classify_mulgae_mcp_scope(\n"
-        "        global_raw, global_probe, mulgae_executable, repository, \"global\"\n"
+        "        global_probe, mulgae_executable, repository, \"global\"\n"
         "    )\n"
         "    if global_probe[\"ok\"]:\n"
         "        global_registration[\"_result\"] = global_probe.get(\"result\")\n"
@@ -937,7 +984,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    elif not project_config_present:\n"
         "        local_registration = missing_mcp_scope(\"project_configuration_missing\")\n"
         "    else:\n"
-        "        local_raw, local_probe = mcp_registration_probe(\n"
+        "        local_probe = mcp_registration_probe(\n"
         "            codex_executable,\n"
         "            \"mulgae\",\n"
         "            neutral_cwd,\n"
@@ -945,7 +992,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            {\"CODEX_HOME\": str(repository / \".codex\")},\n"
         "        )\n"
         "        local_registration = classify_mulgae_mcp_scope(\n"
-        "            local_raw, local_probe, mulgae_executable, repository, \"local\"\n"
+        "            local_probe, mulgae_executable, repository, \"local\"\n"
         "        )\n"
         "        if local_probe[\"ok\"]:\n"
         "            local_registration[\"_result\"] = local_probe.get(\"result\")\n"
@@ -956,15 +1003,13 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        }\n"
         "    )\n"
         "\n"
-        "    effective_raw, effective_probe = mcp_registration_probe(\n"
+        "    effective_probe = mcp_registration_probe(\n"
         "        codex_executable, \"mulgae\", repository, timeout_seconds\n"
         "    )\n"
         "    status, effective_scope, reason = effective_mcp_registration(\n"
-        "        \"mulgae\",\n"
         "        global_registration,\n"
         "        local_registration,\n"
         "        project_config_symlinked,\n"
-        "        effective_raw,\n"
         "        effective_probe,\n"
         "    )\n"
         "    global_registration.pop(\"_result\", None)\n"
@@ -1310,11 +1355,11 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        return registration\n"
         "\n"
         "    neutral_cwd = Path(repository.anchor)\n"
-        "    global_raw, global_probe = mcp_registration_probe(\n"
+        "    global_probe = mcp_registration_probe(\n"
         "        codex_executable, \"gaori\", neutral_cwd, timeout_seconds\n"
         "    )\n"
         "    global_registration = classify_gaori_mcp_scope(\n"
-        "        global_raw, global_probe, gaori_executable, repository, \"global\"\n"
+        "        global_probe, gaori_executable, repository, \"global\"\n"
         "    )\n"
         "    if global_probe[\"ok\"]:\n"
         "        global_registration[\"_result\"] = global_probe.get(\"result\")\n"
@@ -1327,7 +1372,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    elif not project_config_present:\n"
         "        local_registration = missing_mcp_scope(\"project_configuration_missing\")\n"
         "    else:\n"
-        "        local_raw, local_probe = mcp_registration_probe(\n"
+        "        local_probe = mcp_registration_probe(\n"
         "            codex_executable,\n"
         "            \"gaori\",\n"
         "            neutral_cwd,\n"
@@ -1335,7 +1380,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            {\"CODEX_HOME\": str(repository / \".codex\")},\n"
         "        )\n"
         "        local_registration = classify_gaori_mcp_scope(\n"
-        "            local_raw, local_probe, gaori_executable, repository, \"local\"\n"
+        "            local_probe, gaori_executable, repository, \"local\"\n"
         "        )\n"
         "        if local_probe[\"ok\"]:\n"
         "            local_registration[\"_result\"] = local_probe.get(\"result\")\n"
@@ -1346,15 +1391,13 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        }\n"
         "    )\n"
         "\n"
-        "    effective_raw, effective_probe = mcp_registration_probe(\n"
+        "    effective_probe = mcp_registration_probe(\n"
         "        codex_executable, \"gaori\", repository, timeout_seconds\n"
         "    )\n"
         "    status, effective_scope, reason = effective_mcp_registration(\n"
-        "        \"gaori\",\n"
         "        global_registration,\n"
         "        local_registration,\n"
         "        project_config_symlinked,\n"
-        "        effective_raw,\n"
         "        effective_probe,\n"
         "    )\n"
         "    global_registration.pop(\"_result\", None)\n"
@@ -1386,6 +1429,43 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    repository: Path, gaori_executable: str | None, timeout_seconds: float\n"
         ") -> dict[str, Any]:\n"
         "    return inspect_claude_mcp(\"gaori\", repository, gaori_executable, timeout_seconds)\n",
+    ),
+    # Upstream moved the neutral-cwd probe into the project inspector in
+    # v0.1.16, so the rule moves with it: the global inspector's one-line
+    # delegation to `inspect_global_mcp_scope` already ships unchanged. The
+    # previous rule rewrote the global inspector's own `inspect_global_mcp`
+    # instead; this one rewrites the project inspector function it now calls.
+    (
+        "def inspect_global_mcp_scope(\n"
+        "    name: str,\n"
+        "    executable: str | None,\n"
+        "    root: Path,\n"
+        "    timeout_seconds: float,\n"
+        ") -> dict[str, Any]:\n"
+        "    codex_executable = shutil.which(\"codex\")\n"
+        "    if not codex_executable:\n"
+        "        return {\"status\": \"unavailable\", \"reason\": \"codex_executable_missing\"}\n"
+        "    classifiers = {\n"
+        "        \"mulgae\": classify_mulgae_mcp_scope,\n"
+        "        \"gaori\": classify_gaori_mcp_scope,\n"
+        "    }\n"
+        "    classifier = classifiers.get(name)\n"
+        "    if classifier is None:\n"
+        "        raise ValueError(f\"unsupported global MCP component: {name}\")\n"
+        "    probe = mcp_registration_probe(\n"
+        "        codex_executable, name, Path(root.anchor), timeout_seconds\n"
+        "    )\n"
+        "    return classifier(probe, executable, root, \"global\")\n",
+        "def inspect_global_mcp_scope(\n"
+        "    name: str,\n"
+        "    executable: str | None,\n"
+        "    root: Path,\n"
+        "    timeout_seconds: float,\n"
+        ") -> dict[str, Any]:\n"
+        "    # The user-scope view is the same configuration read the project inspector\n"
+        "    # performs for all three scopes, and no host CLI probe runs here: on Claude\n"
+        "    # Code every registration lookup health-checks the server and so starts it.\n"
+        "    return inspect_claude_mcp(name, root, executable, timeout_seconds)[\"global\"]\n",
     ),
     # The configuration inventory names the local registration file. Both the
     # Mulgae and the Gaori inventories carry this identical line, so one rule
@@ -1420,40 +1500,6 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     (
         "    canonical_path = Path.home() / \".agents/skills\" / name\n",
         "    canonical_path = inspector.skill_roots()[0] / name\n",
-    ),
-    # Upstream reads the user-scope MCP registration through the other host's CLI.
-    # Claude Code keeps it in its own configuration, which the project inspector
-    # already reads for all three scopes without starting a server, so the global
-    # view is that read's user-scope entry and no second probe is needed.
-    (
-        "def inspect_global_mcp(\n"
-        "    inspector: Any,\n"
-        "    name: str,\n"
-        "    executable: str | None,\n"
-        "    root: Path,\n"
-        "    timeout_seconds: float,\n"
-        ") -> dict[str, Any]:\n"
-        "    codex = inspector.shutil.which(\"codex\")\n"
-        "    if not codex:\n"
-        "        return {\"status\": \"unavailable\", \"reason\": \"codex_executable_missing\"}\n"
-        "    neutral_cwd = Path(root.anchor)\n"
-        "    raw, probe = inspector.mcp_registration_probe(\n"
-        "        codex, name, neutral_cwd, timeout_seconds\n"
-        "    )\n"
-        "    if name == \"mulgae\":\n"
-        "        return inspector.classify_mulgae_mcp_scope(\n"
-        "            raw, probe, executable, root, \"global\"\n"
-        "        )\n"
-        "    return inspector.classify_gaori_mcp_scope(raw, probe, executable, root, \"global\")\n",
-        "def inspect_global_mcp(\n"
-        "    inspector: Any,\n"
-        "    name: str,\n"
-        "    executable: str | None,\n"
-        "    root: Path,\n"
-        "    timeout_seconds: float,\n"
-        ") -> dict[str, Any]:\n"
-        "    registration = inspector.inspect_claude_mcp(name, root, executable, timeout_seconds)\n"
-        "    return registration[\"global\"]\n",
     ),
     # The per-home options name a dimension this host does not have. They are
     # removed from the signature, the parser, and the call site together, so the
@@ -1624,6 +1670,12 @@ REQUIRED_TEXT: tuple[tuple[str, str], ...] = (
     ("skills/dev-setup/scripts/inspect_tools.py", '".mcp.json"'),
     ("skills/dev-setup/scripts/inspect_tools.py", "enabledMcpjsonServers"),
     ("skills/dev-setup/scripts/inspect_tools.py", "registration_pending_approval"),
+    # The user-scope delegation exists only in the replacement; upstream's
+    # global inspector calls the shrunken form under the same name.
+    (
+        "skills/dev-setup/scripts/inspect_tools.py",
+        'return inspect_claude_mcp(name, root, executable, timeout_seconds)["global"]',
+    ),
     # The writing-skill targets are single-line matches inside a call, so a
     # reformat upstream would restore targets this host cannot reach.
     ("skills/dev-setup/scripts/inspect_tools.py", 'expected_target=skill_roots()[0] / "humanizer"'),

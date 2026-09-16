@@ -4,6 +4,17 @@ This file records concise shipped outcomes of the Aquarium for Claude edition. R
 
 ## v0.1.16 - Unreleased
 
+### Added
+
+- Carry the `mulgae-review` argument hint `<target> [task-or-epic-id]`, the vocabulary its two standalone siblings already use, so the new report-only Mulgae entry point shows its arguments in the slash menu.
+
+### Changed
+
+- Adopt upstream Aquarium v0.1.16: intent-aware Task, Goal, and Epic completion reviews with the shared Review Brief and per-criterion assessment, the report-only `mulgae-review` entrypoint, proportional Orca change reviews with operational-deviation reporting, Sanho v0.2.8 with the five-file `use-sanho` skill, Gaori v0.1.17 with the seven-file `use-gaori` skill, Mulgae v0.1.21 with command-result v8, Sorage v0.1.1 with explicit-only broker operations and the root `.gitignore` rule, structured `Contract:` and `Profile:` fields for `TESTING.md`, Podway handler-contract compatibility, structured Dolgorae release identity, and the Aquarium for Grok edition link in place of Aquarium for Kimi.
+- Keep Independent Review live where upstream disabled it. v0.1.16 stops upstream's Dolgorae-backed route before setup or source transmission and sends the caller to an explicitly selected Orca or host-native subagent review. This edition's route has been that host-native subagent review since v0.1.14, so it stays enabled: the new `references/review-intent-contract.md` becomes the sixth override with its routing matrix and native-route sections rewritten around the backend this edition has, three sentences in the disposition contract and one in `orca-review` are re-derived to say the route is enabled but holds no capture, and the `independent-review` and `review-contract.md` overrides carry the Review Brief, the `change`-versus-`completion` purpose, and per-criterion completion assessments into the subagent backend.
+- Anchor the Ouroboros registration classifier on its whole function. Upstream replaced stderr matching with a structured `codex mcp list --json` inventory and rebuilt the failure branch around a `presence` key only its own probe sets, which killed six script rules at once, while upstream's hard-coded shared skill root for `humanize-korean` killed two more. `claude mcp list` health-checks every approved server and so starts it, so the inventory is not mirrored: the two registration rules became one whole-function rule that still reads the definite not-found from stderr and health from the `Status:` line, and the Mulgae, Gaori, Ouroboros, im-not-ai, and trust-table rules were re-anchored; only the `inspect_im_not_ai` replacement's comment changed, to name the new upstream shape.
+- Follow upstream's move of the user-scope MCP probe into the project inspector. v0.1.16 added `inspect_global_mcp_scope` there and reduced the global inspector's `inspect_global_mcp` to a one-line delegation, so the rule that rewrote the global inspector is retired and the new function returns the configuration read's user-scope view instead; the validator and the MCP inspection tests follow the call.
+
 ## v0.1.15 - 2026-09-09
 
 ### Added

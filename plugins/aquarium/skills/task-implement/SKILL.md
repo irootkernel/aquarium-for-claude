@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Task Implement
 
-Implement only the approved plan for the task established by `/aquarium:task-handler`. When invoked directly, require the repository, roadmap path, task ID, and explicit plan approval; stop if the plan or current task-owned boundary cannot be reconstructed safely.
+Implement only the approved plan for the task established by `/aquarium:task-handler`. Consume the selected `record-plan.plan-summary` and current `prepare-implementation.implementation-entry-summary`; neither is inherited from graph order alone. When invoked directly, require the repository, roadmap path, task ID, and explicit plan approval; stop if the plan or current task-owned boundary cannot be reconstructed safely.
 
 ## Re-establish the Baseline
 

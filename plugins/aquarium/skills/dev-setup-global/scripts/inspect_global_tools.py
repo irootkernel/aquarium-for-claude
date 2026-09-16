@@ -154,8 +154,7 @@ def inspect_global_mcp(
     root: Path,
     timeout_seconds: float,
 ) -> dict[str, Any]:
-    registration = inspector.inspect_claude_mcp(name, root, executable, timeout_seconds)
-    return registration["global"]
+    return inspector.inspect_global_mcp_scope(name, executable, root, timeout_seconds)
 
 
 def inspect_global_podway(

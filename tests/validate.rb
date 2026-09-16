@@ -235,6 +235,9 @@ if inspection.file?
   # probed through another host's CLI and never by starting the server.
   assert(script.include?("def inspect_claude_mcp("), "inspection must read Mulgae and Gaori MCP registrations from Claude Code configuration")
   assert(script.include?('".mcp.json"'), "inspection must read the project MCP registration file")
+  # Upstream v0.1.16 moved the neutral-cwd probe into the project inspector as
+  # `inspect_global_mcp_scope`, so the rewrite moved with it.
+  assert(script.include?('return inspect_claude_mcp(name, root, executable, timeout_seconds)["global"]'), "the global MCP view must come from the configuration read")
   # The writing skills must be diagnosed against a root this host can reach;
   # upstream expects them in the shared cross-agent root and the Codex home.
   assert(!script.include?('".agents/skills/humanizer"'), "inspection must not expect Humanizer in another host's skill root")
@@ -245,9 +248,12 @@ if inspection.file?
     "every writing skill must be expected in the Claude Code skill root"
   )
   # Upstream's Codex-based probe helpers stay defined but must have no callers:
-  # each name may appear exactly once, at its `def`.
+  # each name may appear exactly once, at its `def`. `codex_version_from_output`
+  # lost its only caller when the Mulgae registration probe was replaced, so it
+  # joins the list.
   %w[mcp_registration_probe classify_mulgae_mcp_scope classify_gaori_mcp_scope effective_mcp_registration
-     ouroboros_direct_launcher_matches ouroboros_isolated_launcher_matches effective_codex_skill_root].each do |helper|
+     ouroboros_direct_launcher_matches ouroboros_isolated_launcher_matches effective_codex_skill_root
+     codex_version_from_output].each do |helper|
     assert(script.scan("#{helper}(").length == 1, "inspection must not call the Codex-based #{helper}")
   end
   assert(!script.include?('"mcp", "get", "mulgae"') && !script.include?('"mcp", "get", "gaori"'), "inspection must not health-check Mulgae or Gaori through claude mcp get")
@@ -260,7 +266,8 @@ end
 
 # The global inspector reaches the project inspector across skill directories, so
 # the excluded per-home Ouroboros module must be gone from both its imports and
-# its component set, and its user-scope MCP view must come from configuration.
+# its component set, and its user-scope MCP view must come from the project
+# inspector, whose `inspect_global_mcp_scope` is the configuration read.
 global_inspection = PLUGIN.join("skills/dev-setup-global/scripts/inspect_global_tools.py")
 if global_inspection.file?
   script = global_inspection.read
@@ -269,7 +276,7 @@ if global_inspection.file?
   assert(!script.include?("codex_home"), "the global inspector must not carry per-home options")
   assert(!script.include?('"aquarium-dev",'), "the global inspector must not offer the excluded development channel")
   assert(script.include?("inspector.inspect_ouroboros("), "the global inspector must keep the plugin-scoped Ouroboros probe")
-  assert(script.include?("inspector.inspect_claude_mcp("), "the global inspector must read the user-scope MCP view from configuration")
+  assert(script.include?("inspector.inspect_global_mcp_scope("), "the global inspector must take its user-scope MCP view from the project inspector's configuration read")
   assert(script.include?("inspector.skill_roots()[0]"), "the global inspector must diagnose canonical skills in the Claude Code skill root")
 end
 

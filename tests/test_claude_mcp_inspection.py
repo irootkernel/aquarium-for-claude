@@ -211,6 +211,35 @@ class ClaudeMcpInspectionTest(unittest.TestCase):
         self.assertNotIn("codex_version", tool["mcp_registration"])
         self.assertIn("claude_version", tool["mcp_registration"])
 
+    def test_the_global_scope_is_the_configuration_read(self) -> None:
+        self.write_user_configuration({"mcpServers": {"mulgae": self.entry(["mcp"])}})
+        executable = str(self.binary)
+        result = self.module.inspect_global_mcp_scope("mulgae", executable, self.repository, 5.0)
+        self.assertEqual(
+            result,
+            self.module.inspect_claude_mcp("mulgae", self.repository, executable, 5.0)["global"],
+        )
+        self.assertEqual(result["status"], "configured")
+
+    def test_mulgae_and_gaori_registrations_delegate_to_the_configuration_read(self) -> None:
+        self.write_user_configuration(
+            {
+                "mcpServers": {
+                    "mulgae": self.entry(["mcp"]),
+                    "gaori": self.entry(["mcp"]),
+                }
+            }
+        )
+        exe = str(self.binary)
+        self.assertEqual(
+            self.module.inspect_mulgae_mcp(self.repository, exe, 5.0),
+            self.module.inspect_claude_mcp("mulgae", self.repository, exe, 5.0),
+        )
+        self.assertEqual(
+            self.module.inspect_gaori_mcp(self.repository, exe, 5.0),
+            self.module.inspect_claude_mcp("gaori", self.repository, exe, 5.0),
+        )
+
 
 class GlobalInspectorTest(unittest.TestCase):
     """The global inspector is surgery no other gate executes.
@@ -241,19 +270,19 @@ class GlobalInspectorTest(unittest.TestCase):
                         self.module.parse_arguments()
 
     def test_the_global_mcp_view_comes_from_configuration(self) -> None:
-        """The user-scope view is the project inspector's read, not a CLI probe."""
+        """The user-scope view comes through the project inspector's configuration read."""
         calls = []
 
-        def fake(tool, repository, executable, timeout_seconds):
-            calls.append((tool, executable))
-            return {"global": {"status": "configured", "scope": "global"}}
+        def fake(name, executable, root, timeout_seconds):
+            calls.append((name, executable, root, timeout_seconds))
+            return {"status": "configured", "scope": "global"}
 
-        inspector = types.SimpleNamespace(inspect_claude_mcp=fake)
+        inspector = types.SimpleNamespace(inspect_global_mcp_scope=fake)
         result = self.module.inspect_global_mcp(
             inspector, "mulgae", "/bin/mulgae", Path("/"), 5.0
         )
         self.assertEqual(result, {"status": "configured", "scope": "global"})
-        self.assertEqual(calls, [("mulgae", "/bin/mulgae")])
+        self.assertEqual(calls, [("mulgae", "/bin/mulgae", Path("/"), 5.0)])
 
 
 class ClaudeSkillRootTest(unittest.TestCase):
