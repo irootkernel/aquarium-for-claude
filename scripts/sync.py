@@ -503,14 +503,24 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # Naming the mechanism follows upstream's own charter of making supported
     # native capabilities readily usable; the tool's own name is deliberately
     # not spelled, because Claude Code has already renamed it once and a stale
-    # name would send the model looking for a tool it does not have.
+    # name would send the model looking for a tool it does not have. Workers
+    # request `opus`, the baseline for every delegated role here: a worker with
+    # no explicit model inherits the coordinator's, so a Fable session would
+    # otherwise fan out Fable workers. Fable stays an explicit user choice.
     (
         "Use the available agent delegation surface to dispatch fresh subagents for independent risk clusters.",
-        "Use the host's own subagent mechanism to dispatch fresh subagents for independent risk clusters.",
+        "Use the host's own subagent mechanism to dispatch fresh subagents for independent risk clusters, requesting the `opus` model for every worker unless the user explicitly asked for Fable, because a worker without an explicit model inherits the coordinator's.",
     ),
     (
         "Parallelize independent clusters when capacity allows without weakening isolation.",
         "Parallelize independent clusters by launching their workers in a single message when capacity allows, without weakening isolation.",
+    ),
+    # `epic-handler` may add an optional fresh read-only perspective and names
+    # no model for it, so on a Fable session it would inherit Fable; it requests
+    # `opus` like every other delegated role here.
+    (
+        "Use a fresh read-only subagent for an additional perspective when task risk or uncertainty merits it.",
+        "Use a fresh read-only subagent for an additional perspective when task risk or uncertainty merits it, requesting the `opus` model unless the user explicitly asked for Fable.",
     ),
 )
 

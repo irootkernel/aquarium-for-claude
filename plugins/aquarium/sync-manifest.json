@@ -88,9 +88,9 @@
     "skills/docs-setup/references/operations.md": "0d8bc8c249e35d2fff877e2758cb31a551b462357ada7991ddc1d5e9536cf099",
     "skills/docs-setup/references/profiles.md": "14eb66d1b16ddab32dec4251a122ebf935e6c5c84da48504c78d65bdcb691025",
     "skills/docs-setup/scripts/inspect_docs.py": "521dbc4a299b545332c4118134d3d9a61f3d7546518b692a4b9fdf45dbae0d08",
-    "skills/epic-handler/SKILL.md": "5b86af86011dee048ef155889428f4b789a4bc3279d7dc1bbf007a49fca2835c",
+    "skills/epic-handler/SKILL.md": "1ea0cfdb883b57feae6ff73b815fac0b32e419ab7c869235ef08acbed2ba2d36",
     "skills/epic-validator/SKILL.md": "4efb5a8f5ad7e9e007ffb3bb25e9613c869a31de3aefc3e528636bcee10e6f22",
-    "skills/independent-review/SKILL.md": "cc2d8cf55aad938cf2b73976b0e794ba6244ae84977904694cd34e105cd5463c",
+    "skills/independent-review/SKILL.md": "874cc943b2e52855eda94778afcee0dad05d1828e1ac73abc2d6c3c7998701d1",
     "skills/independent-review/scripts/inspect_repository_state.py": "360ed1f5236f662b80b8cc24cb201650df4e65eff90897e66ad91232da45892b",
     "skills/independent-review/scripts/inspect_review_target.py": "1b1578bc0b278638ca4e614cefd5db1615538bac9509c1bbc0505d4ae33215e0",
     "skills/mulgae-review/SKILL.md": "394e3a800f466a73e20a9c2ae58f70b7925a5643046a07e93633ee233e3d13ab",
@@ -104,7 +104,7 @@
     "skills/release-handler/references/publication-recovery.md": "c3b1d2b1531f10abd0c4b24499a3a1132b7ac070b40df590dabcb4d400d85b29",
     "skills/release-handler/scripts/inspect_publication_state.py": "6ab11fb425cee66ce0b160c2edd01d732e375aa2386f71a2e3a55b93598cb000",
     "skills/release-handler/scripts/inspect_release_notes.py": "a5cc57a9b1ff4df68e283c3f8fa77b220dc94d15f5dc531d818e5ae8bffa2604",
-    "skills/release-qa/SKILL.md": "b5d25e9cf780c4d83688ead265f514c645a5c0a3b051e25391fce90de25b8d69",
+    "skills/release-qa/SKILL.md": "ecdd6481976fcac8ee0c124ac014fb6e8350e30d0a9c71a577f340382d215ae5",
     "skills/release-qa/scripts/manage_release_qa.py": "18e744553d78ea53310d6c3f2e99cfb157bfd7c7ff642bafaa74737c117e4fa7",
     "skills/task-close/SKILL.md": "b394fee55fa3565d19e74886a76f92316983ce36dc7c2d372eb4a32dc298c4ac",
     "skills/task-commit/SKILL.md": "3066066e9d9d1de7f922116097eec41703234f37a267b560500f936e7168c686",
@@ -119,8 +119,8 @@
     "skills/test-setup/references/contract.md": "7c461015b91d174b496d60a8ea77c68dda6ab6599c4978906758f3557c5103f3",
     "skills/test-setup/references/profiles.md": "f55bf087c04cf136f96b91ec754b84a9f9f106b38103e81df0946cb01b83cacb",
     "skills/test-setup/scripts/inspect_testing.py": "5ac08ed6e298b1c5e8b2166ccdf907cd76aec9a3874a410c710a81782c8157a1",
-    "skills/upgrade/SKILL.md": "9dae04c73363df44d993b430ab54633b1ad3df00278d0ee674cb61154c261536",
-    "skills/upgrade/references/rederivation.md": "f3132dc83b73ecc5f52fa088864f2575b728e30aa77cda8c4ba21afe3887f8dd",
+    "skills/upgrade/SKILL.md": "88e185f1fb01662488da4424f51b5de244b776891eb6d6011a289d4302bdb564",
+    "skills/upgrade/references/rederivation.md": "8a5200435784e9862c7c7c594f6c977efc02000dbd4a0266963feaba186f2e91",
     "skills/war-room/SKILL.md": "be7ba6a8b2b565968512c006542a20fad4490e07fbe9e59a5c17e4e6fb7ef56c"
   }
 }

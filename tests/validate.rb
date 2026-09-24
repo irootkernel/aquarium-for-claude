@@ -605,6 +605,9 @@ assert(
   "independent review must not reach across skill directories for the inspector"
 )
 
+# `fable` is deliberately absent: Opus is the baseline for every delegated role
+# here, and Fable is used only when the user explicitly asks, because it can bill
+# usage credits and a non-interactive run bills them without asking.
 AGENT_MODELS = %w[inherit opus sonnet haiku].freeze
 EDITING_TOOLS = %w[Edit Write NotebookEdit].freeze
 
