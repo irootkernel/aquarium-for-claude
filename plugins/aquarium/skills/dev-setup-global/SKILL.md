@@ -20,7 +20,7 @@ Read the selected sections of [the shared tool catalog](../../references/tool-ca
 
 1. On a direct invocation without a component list, select every supported global component. On a scoped continuation, select only the named components and their direct prerequisites.
 2. A direct invocation authorizes bounded read-only official metadata and raw-file freshness requests for all selected components. A scoped continuation authorizes only its selected sources. Disclose the official endpoints before contact.
-3. Resolve this skill's directory and run `python3 <skill-directory>/scripts/inspect_global_tools.py --verify-dolgorae-release` on a direct unscoped invocation. For a scoped continuation, add one `--component <name>` argument for each selected component in catalog order, add `--verify-dolgorae-release` only when Dolgorae is selected, and run no unselected component probe.
+3. Resolve this skill's directory and run `python3 <skill-directory>/scripts/inspect_global_tools.py` on a direct unscoped invocation. For a scoped continuation, add one `--component <name>` argument for each selected component in catalog order and run no unselected component probe.
 
    Outside Plan Mode, disclose the Sorage open-and-migrate diagnostic side effect, then add `--include-sorage-initialization` when Sorage is selected. The same disclosure applies to a scoped Sorage continuation.
 4. Treat `--repository <existing-directory>` only as a compatibility input. Validate that it is an existing directory, but never use it as command or configuration scope, so diagnosis also works outside a Git worktree.
@@ -47,7 +47,7 @@ Use one exact supported release tag or disclosed full commit SHA according to th
 
 For each selected paired or third-party skill, compare the verified source with its canonical target. Treat missing or extra files, different bytes, invalid frontmatter, symlinks, and duplicate installations as independent gaps. The shipped inspector diagnoses only im-not-ai's `humanize-korean` skill; its other two skills and its four subagents are established by this comparison alone.
 
-Apply this duplicate rule to shared-location skills. Other agent skill roots remain diagnostic evidence only. When another copy exists, report the duplicate risk and never create a known duplicate. Do not propose installation at the canonical target until the user separately approves removal or migration of the alternate copy so that one canonical target remains.
+Apply this duplicate rule to shared-location skills. Other agent skill roots remain diagnostic evidence only. When another copy would be loaded beside the selected target, report the duplicate risk and never create a known duplicate. Do not propose installation at the canonical target until the user separately approves removal or migration of the conflicting copy.
 
 `dev-setup` trusting an existing canonical path is not freshness evidence.
 

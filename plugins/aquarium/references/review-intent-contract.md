@@ -1,6 +1,6 @@
 # Review Intent Contract
 
-Use this contract whenever an Aquarium route asks a reviewer to assess a change or completion — `/aquarium:independent-review`, `/aquarium:orca-review`, `/aquarium:mulgae-review`, and the embedded Task and Epic reviews. It defines the intent supplied to the reviewer and the completion fact consumed by Aquarium. It does not replace a backend's capture, transport, provider selection, execution, recovery, publication, or settlement contract.
+Use this contract whenever an Aquarium route asks a reviewer to assess a change or completion — `/aquarium:independent-review`, `/aquarium:orca-review`, `/aquarium:mulgae-review`, and the embedded Task, Epic, and validation reviews. It defines the intent supplied to the reviewer and the completion fact consumed by Aquarium. Embedded Task, Epic, and validation workflows also read [review-routing-contract.md](review-routing-contract.md) for selection, route-neutral evidence, switching, and waiver semantics. It does not replace a backend's capture, transport, provider selection, execution, recovery, publication, or settlement contract.
 
 ## Select the purpose
 
@@ -13,11 +13,11 @@ Purpose does not change the selected source scope, native review mode, remediati
 
 ## Route an Independent Review request
 
-On this host `/aquarium:independent-review` is enabled as the native subagent route: it dispatches fresh read-only reviewer subagents through the host's own subagent mechanism under [review-contract.md](review-contract.md), so it needs no explicitly preselected alternative and owns its own execution, source handling, lifecycle, evidence, and result.
+On this host `/aquarium:independent-review` is enabled as the standalone native subagent review: it dispatches fresh read-only reviewer subagents through the host's own subagent mechanism under [review-contract.md](review-contract.md), so it needs no explicitly preselected alternative and owns its own execution, source handling, lifecycle, evidence, and result. It is not a selectable workflow review route; embedded Task, Epic, and validation workflows reach native Claude Code review through the `native-codex` route defined in [review-routing-contract.md](review-routing-contract.md).
 
 `workspace` and `dirty` have no supported meaning on either standalone static route, so a request for one of them is reported together with the `staged` or `head` alternative rather than translated or silently broadened.
 
-A Mulgae or Orca review is its own explicit invocation under its own contract, never an automatic fallback for a target this route refuses.
+A Mulgae or Orca review is its own explicit invocation under its own contract, never an automatic fallback for a target this entry point refuses.
 
 ## Build the Review Brief
 
@@ -33,18 +33,18 @@ Before an authorized dispatch through an enabled route, build one concise Review
 | Candidate and context | The exact native source scope and revisions, included and excluded state, and contextual sources available to the reviewer. |
 | Completion checkpoint | Readiness before closeout or assessment of an already claimed outcome, including the obligations due now. |
 | Verification evidence | Relevant checks, candidate identities, unavailable evidence, author-reported results, and checks the reviewer may not run. |
-| Invocation metadata | Existing goal revision, ordinal, review mode, selected roles, and lineage required by the owning workflow. |
+| Invocation metadata | Existing goal revision, ordinal, assessment kind, review mode, selected roles, and lineage required by the owning workflow. |
 | Requested result | Findings and limitations for `change`; findings, every criterion assessment, and evidence gaps for `completion`. |
 
 Reuse existing requirement identifiers. When none exist, cite a source path and section or a local report label without creating a canonical identifier. The brief is a guide to authoritative sources, not a replacement for them.
 
 ## Use a native review subagent
 
-Independent Review dispatches a fresh host-native review subagent for each assigned lens whenever the current host exposes native delegation. Give each one the same Review Brief, exact target, and approved context that another static route would receive. Do not invent a delegation tool or silently choose Orca, Mulgae, or another backend; when no subagent mechanism is available, a dispatch fails, or a reviewer returns no usable output, report that limitation and stop without fallback.
+Independent Review dispatches a fresh host-native review subagent for each assigned lens whenever the current host exposes native delegation. An embedded Task, Epic, or validation workflow dispatches a fresh host-native review subagent through the native Claude Code route, `native-codex`, only when that route is explicitly selected and the current host exposes native delegation. Give each one the same Review Brief, exact target, and approved context that another static route would receive. Do not invent a delegation tool or silently choose Orca, Mulgae, or another backend; when no subagent mechanism is available, a dispatch fails, or a reviewer returns no usable output, report that limitation and stop without fallback.
 
 The subagent review is static and report-only. Require it to inspect the selected candidate, the applicable original requirements, and relevant callers, contracts, or tests without running checks, editing files, changing Git state, or spawning another review. For `completion`, require findings, one assessment for every applicable criterion, and explicit evidence gaps. For `change`, require findings and limitations without claiming whole-work-unit completion. The coordinator verifies the result while preserving subagent and coordinator evidence as separate provenance.
 
-Use only the lifecycle and evidence the host actually provides. Do not describe this route as Dolgorae, Orca, or Mulgae, and do not claim an immutable capture, publication, settlement, or recovery guarantee that was not observed. If the host cannot provide a fresh subagent or the selected target cannot be bounded, report that limitation and stop without automatic fallback.
+Use only the lifecycle and evidence the host actually provides. Do not describe a native subagent review as Dolgorae, Orca, or Mulgae, and do not claim an immutable capture, publication, settlement, or recovery guarantee that was not observed. If the host cannot provide a fresh subagent or the selected target cannot be bounded, report that limitation and stop without automatic fallback.
 
 ## Recover intent and provenance
 
@@ -73,11 +73,22 @@ Referenced sources must be readable in the selected review environment. A host-o
 
 When a transport or readability limit makes original authority or required evidence unavailable in the selected review environment, disclose the exact omitted context. Mark a criterion `unverified` when that omission prevents a supported assessment from the evidence the reviewer can read. If readable evidence already establishes a concrete gap, assess the criterion as `unmet` under the rules below. A Review Brief omission alone does not affect the assessment when the reviewer can independently read the original authority and applicable evidence. A coordinator summary of material the reviewer cannot read remains coordinator evidence and does not establish provider or role coverage.
 
+## Bind the assessment kind
+
+Every embedded completion checkpoint uses one of these assessment kinds:
+
+- `work-unit` evaluates the named Task, Epic, or explicit work objective against its actual criteria. The brief identifies the work unit, goal revision, authority, non-goals, base revision, exact candidate, ordered work commits when they exist, included changed paths and artifacts, excluded state, and verification evidence. For an uncommitted Task, use the exact base HEAD plus the index tree or native capture identity and staged path inventory instead of inventing a commit.
+- `remediation-confirmation` evaluates only a frozen set of earlier findings, the correction delta, invalidated criteria, directly affected callers, contracts and tests, and regressions caused by that correction. The brief identifies the prior review, previous target, source finding IDs, correction commits or capture delta, affected paths and criteria, and required checks.
+
+The exact candidate remains available as reviewer context in both kinds. Context access does not authorize a repository-wide audit. A `work-unit` assessment reports defects in the named objective and candidate, not unrelated pre-existing issues. A `remediation-confirmation` may add a new blocker only when the correction caused it or made it directly reachable. Route an unrelated observation to the repository's future-work owner without widening the current review.
+
+Carry unaffected criterion assessments from the latest admitted `work-unit` assessment only when the correction and current evidence prove that they remain valid. Reassess every invalidated criterion. If the changed surface, requirement set, or evidence impact cannot be bounded, stop and obtain authority for a new goal revision or another `work-unit` assessment instead of treating the pass as remediation confirmation.
+
 ## Assess change and completion
 
 For `change`, inspect the intended effect plus relevant implementation, callers, contracts, and tests. Separate pre-existing issues from defects introduced or made reachable by the change. Do not expand into an unrelated repository-wide audit.
 
-For `completion`, start with the applicable requirements and trace them to implementation, production wiring, consumers, tests, documentation, and required artifacts. Inspect unchanged code when needed to detect missing wiring, modules, migrations, recovery, or acceptance evidence. For an Epic, cover every applicable member requirement and integration seam. For a member Task, apply current parent-Epic constraints without requiring unfinished future members prematurely.
+For a `work-unit` completion assessment, start with the applicable requirements and trace them to implementation, production wiring, consumers, tests, documentation, and required artifacts. Inspect unchanged code when needed to detect missing wiring, modules, migrations, recovery, or acceptance evidence. For an Epic, cover every applicable member requirement and integration seam. For a member Task, apply current parent-Epic constraints without requiring unfinished future members prematurely. For `remediation-confirmation`, reassess the frozen findings, correction delta, directly affected criteria, and direct regression surface while carrying only the unaffected criteria permitted above.
 
 Every enabled completion reviewer must reconcile the Review Brief's criterion set with the named work unit's original authority and applicable member requirements. Assess a reconciled requirement omitted from the brief as `met`, `unmet`, `unverified`, or `not-applicable` from the readable evidence. Mark it `unverified` only when the requirement is unreadable, its conflict remains unresolved, or the available evidence is insufficient. Neither the brief nor a coordinator summary may narrow the authoritative completion basis silently.
 

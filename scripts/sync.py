@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import ast
 import filecmp
+import fnmatch
 import hashlib
 import json
 import re
@@ -126,6 +127,25 @@ EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
     ),
 )
 
+# Upstream skills this artifact does not ship, removed whole before any text
+# rule runs so their text neither ships nor keeps a rule alive. A skill cannot
+# be excluded file by file: `transform_skills` refuses a skill directory without
+# `SKILL.md`, and a basename reference check on `SKILL.md` would match every
+# skill. The skill must still exist upstream, and generated text must not name
+# it, for the same reasons an excluded file must not.
+EXCLUDED_SKILLS: tuple[tuple[str, str], ...] = (
+    (
+        "status",
+        "v0.1.17's production-setup status report: every step it takes — the scoped "
+        "`aquarium-status` inspection, `aquarium-status show`, and `forget` — runs the "
+        "ledger runtime under the excluded plugin-root `tools/`, it reports enrollment "
+        "in the `aquarium-dev` channel this edition does not ship, and its record "
+        "envelopes are specified only in upstream's repository-level `docs/specs/`, "
+        "outside the plugin; the ledger lifecycle upstream wired into `dev-setup` and "
+        "`dev-setup-bundle` is removed with it",
+    ),
+)
+
 # Upstream plugin-root entries this transformation never copies. `copy_tree`
 # walks `COPIED_DIRECTORIES` and no top-level file at all, so both a new
 # directory and a new file are decisions, and each entry pairs the name with the
@@ -138,7 +158,11 @@ EXCLUDED_PLUGIN_ROOT: tuple[tuple[str, str], ...] = (
         "Darwin arm64 development channel that builds unreleased local-main artifacts "
         "of Aquarium and its producer CLIs under `~/.aquarium-dev`, passes `CODEX_HOME` "
         "through to them, and produces Codex plugin artifacts; no skill in this artifact "
-        "routes through it, and its 37 KB hash-pinned wheel lock would ship dead weight",
+        "routes through it, and its 37 KB hash-pinned wheel lock would ship dead weight. "
+        "v0.1.17 added the `aquarium-status` production-setup ledger runtime beside it: "
+        "an Apple Silicon-only hash-pinned Python runtime and launcher under "
+        "`~/.aquarium/status-runtime`, shared with the other host's edition, that the "
+        "excluded `status` skill reports and upstream's `dev-setup` records into",
     ),
     (
         ".mcp.json",
@@ -187,19 +211,137 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "A standalone `/aquarium:independent-review` dispatches fresh read-only reviewer subagents through this host's own subagent mechanism under its own contract. A direct `/aquarium:task-review` or a standalone `/aquarium:independent-review`, `/aquarium:mulgae-review`, or `/aquarium:orca-review` is report-only.",
     ),
     (
-        "from Mulgae Review, Orca Review, an explicitly selected native Codex review subagent, or the dormant Independent Review contract if that route is re-enabled.",
-        "from Mulgae Review, Orca Review, or Independent Review through this host's own reviewer subagents.",
+        "from Mulgae Review, Orca Review, an explicitly selected native Codex review subagent, a workflow review waiver, or the dormant Independent Review contract if that route is re-enabled.",
+        "from Mulgae Review, Orca Review, Independent Review, an explicitly selected native Claude Code review subagent, or a workflow review waiver.",
+    ),
+    # Upstream v0.1.17 wired its production-setup ledger into `dev-setup` and
+    # `dev-setup-bundle`: a gate that blocks every repository mutation until the
+    # `aquarium-status` runtime reads the predecessor row, attempt creation, a
+    # recording section, and the bundle's attempt and receipt handoff. The
+    # runtime lives under the excluded plugin-root `tools/` and the `status`
+    # skill is excluded whole, so these spans are deleted or rewritten without
+    # the ledger. Counted substitutions rather than an override: upstream edits
+    # both files nearly every release, the new text is hard-wrapped, and the
+    # rules below for their other spans would die inside an override. Anchors
+    # still carry `$aquarium:` sigils, so they run before that rule.
+    (
+        "Before preparing any terminal attempt, require the scoped global inspector to\n"
+        "report `aquarium-status` as `current`. A missing, outdated, or broken runtime is\n"
+        "a `$aquarium:dev-setup-global` continuation with its own proposal and approval;\n"
+        "an unsafe or unknown launcher is a blocker. Do not begin repository mutation\n"
+        "until the current runtime can read the predecessor row revision.\n"
+        "\n"
+        "After canonical Git identity and full or scoped component intent are fixed, use\n"
+        "the canonical Git root's final NFC-normalized path component as the project\n"
+        "label. General setup without an explicit component limit is full; every\n"
+        "explicit component request or continuation is scoped to its sorted unique\n"
+        "component names, including `agents-guidance` when guidance is selected. Then\n"
+        "create one `aquarium-production-status-attempt/v1` immediately before\n"
+        "the first persistent setup mutation. For a terminal no-op, create it immediately\n"
+        "before settlement. Read the current row revision through `aquarium-status show\n"
+        "--format json`; a missing row uses revision 0. A bundle-supplied attempt replaces\n"
+        "local creation and must be preserved byte-for-byte. Diagnosis, Plan Mode, and\n"
+        "work stopped before execution approval do not create an attempt.\n"
+        "\n",
+        "",
+    ),
+    (
+        "## Record Terminal Setup\n"
+        "\n"
+        "For every attempt created here or supplied by the bundle, submit exactly one\n"
+        "`aquarium-production-status-record/v1` after the target reaches `ready`,\n"
+        "`partial`, `failed`, or `declined`. Populate completion time and only settled\n"
+        "`sanho` or `aquarium_dev` component observations. Run the current bundled\n"
+        "recorder through the verified `aquarium-status` dependency runtime so the\n"
+        "recorded Aquarium version belongs to this plugin, not a stale PATH payload. Use\n"
+        "`python3 <plugin-root>/tools/aquarium-status/install.py run-bundled --source\n"
+        "<plugin-root>/tools/aquarium-status record` with the closed document on standard\n"
+        "input; do not import a cache path into the current agent process.\n"
+        "\n"
+        "Return `aquarium-production-status-recording-result/v1` with exactly `schema`,\n"
+        "`status`, `attempt_id`, `receipt`, `retry_request`, and `problem_code`. Preserve\n"
+        "setup success if recording fails: return `failed`, the exact original record\n"
+        "document as `retry_request`, a closed problem code, and make the enclosing setup\n"
+        "result `partial`. A retry submits only that identical document to `record`; it\n"
+        "must not re-enter or repeat setup. If canonical identity was unavailable, return\n"
+        "`not_recordable` with a null attempt ID and do not write a row. Use the exact\n"
+        "fields, nullability rules, and closed problem codes in the\n"
+        "[production-status specification](../../../../docs/specs/production-status.md).\n"
+        "\n",
+        "",
+    ),
+    ("status-recording result or exact record-only retry, ", ""),
+    (
+        "Pass the normalized `shared_tools` union, manifest digest, requesting skill, and\n"
+        "the infrastructure component `aquarium-status` to `$aquarium:dev-setup-global`.\n"
+        "The global skill maps each selected name to one `--component <name>` inspector\n"
+        "argument and runs no other component. `aquarium-status` is common bundle\n"
+        "infrastructure, not a new manifest tool, so this preserves\n"
+        "`aquarium.dev-setup-bundle/v1` and its existing vocabulary.\n",
+        "Pass the normalized `shared_tools` union, manifest digest, and requesting skill to `/aquarium:dev-setup-global`. The global skill maps each selected name to one `--component <name>` inspector argument and runs no other component, which preserves `aquarium.dev-setup-bundle/v1` and its existing vocabulary.\n",
+    ),
+    (
+        "For each ready target, after manifest revalidation and canonical identity freeze,\n"
+        "read its current row through `aquarium-status show --format json` and create one\n"
+        "`aquarium-production-status-attempt/v1` with exactly `schema`, a new UUIDv4\n"
+        "`attempt_id`, that `expected_row_revision` or 0, the canonical `git_root`, the\n"
+        "project label equal to the canonical Git root's final NFC-normalized path\n"
+        "component, the UTC `started_at`, and a scoped component `scope`. Its component\n"
+        "list is the sorted unique effective `tools` list plus `agents-guidance` exactly\n"
+        "when the effective guidance policy is `propose`. A bundle target is never a\n"
+        "full attempt, because the manifest is an explicit component selection; this\n"
+        "prevents it from advancing `last_full_ready`. The\n"
+        "[production-status specification](../../../../docs/specs/production-status.md)\n"
+        "owns this closed envelope. Pass it with the requesting\n"
+        "skill, manifest digest, target index, canonical Git root, complete effective tool\n"
+        "list, explicit local MCP overrides, and guidance policy to `$aquarium:dev-setup`.\n"
+        "The repository skill interprets the list as target intent, preserves that attempt\n"
+        "unchanged, and never repeats global installation or freshness work.\n",
+        "For each ready target, after manifest revalidation and canonical identity freeze, pass the requesting skill, manifest digest, target index, canonical Git root, complete effective tool list, explicit local MCP overrides, and guidance policy to `/aquarium:dev-setup`. The repository skill interprets the list as target intent and never repeats global installation or freshness work.\n",
+    ),
+    (
+        "Once a target enters `dev-setup`, accept its recording receipt only when the\n"
+        "attempt ID, canonical root, predecessor row revision, and resulting revisions\n"
+        "match the handoff contract. Never record that target a second time. If a target\n"
+        "settles before entry, complete and record the bundle-owned original attempt once.\n"
+        "On recording failure, preserve the exact record-only retry request and never\n"
+        "repeat target mutations. Validate the closed recording-result fields and problem\n"
+        "codes against the same specification. Continue independent targets.\n"
+        "\n",
+        "",
     ),
     ("$aquarium:", "/aquarium:"),
-    # The shared disposition contract now credits re-review after remediation
-    # to Independent Review and Orca alike, and hedges only for a dormant
-    # Independent Review upstream could re-enable. This edition's Independent
-    # Review reads the live target exactly as Orca's reviewer does, so it is
-    # never dormant here and upstream's hedge is false in this artifact.
+    # The shared disposition contract credits re-review after remediation to
+    # every route — v0.1.17 added the native subagent route and the waiver —
+    # and hedges only for a dormant Independent Review upstream could
+    # re-enable. This edition's Independent Review reads the live target
+    # exactly as Orca's reviewer does, so it is never dormant here and
+    # upstream's hedge is false in this artifact.
     (
-        "Mulgae creates a fresh native capture, and Orca reads the corrected live target. Independent Review would require a fresh capture if separately re-enabled.",
-        "Mulgae creates a fresh native capture, and Independent Review and Orca read the corrected live target.",
+        "Mulgae creates a fresh native capture, Orca reads the corrected live target, native Codex requires a fresh report-only subagent, and a waiver requires a new coordinator assessment. Independent Review would require a fresh capture if separately re-enabled.",
+        "Mulgae creates a fresh native capture, Independent Review and Orca read the corrected live target, native Claude Code requires a fresh report-only subagent, and a waiver requires a new coordinator assessment.",
     ),
+    # Upstream v0.1.17 lets Task, Epic, and validation workflows select one
+    # review route, one of which is a fresh host-native subagent it names
+    # "native Codex". On this host that route is Claude Code's own subagent
+    # review, so the prose renames it; the `native-codex` route ID and the
+    # Podway Procedure labels stay byte-canonical (see `CANONICAL_PHRASES`).
+    # The routing contract also says Independent Review remains disabled, which
+    # is false here: it stays a live standalone entry point, though still not a
+    # selectable workflow route. Every rule whose anchor contains the phrase
+    # runs before the generic rename at the end of this block.
+    (
+        "Independent Review remains disabled and is not a\nselectable route.",
+        "On this host the `native-codex` route ID and the Podway Procedure labels and criteria that name this route keep upstream's canonical bytes and mean Claude Code's native subagent review. `/aquarium:independent-review` stays live as a standalone report-only entry point and is not a selectable route.",
+    ),
+    (
+        "Do not describe native Codex\nas Independent Review, Dolgorae, Orca, or Mulgae.",
+        "Do not describe native Claude Code as Dolgorae, Orca, or Mulgae, or report its checkpoint as a standalone Independent Review run.",
+    ),
+    # The leading space keeps a word that merely ends in "native", such as
+    # "alternative", from being renamed; a capital N already starts a word.
+    (" native Codex", " native Claude Code"),
+    ("Native Codex", "Native Claude Code"),
     # `$use-podway`, `$use-sanho`, `$use-mulgae`, `$use-gaori`. A prefix rule
     # covers the family and any later sibling; `/use-` cannot re-match it.
     ("$use-", "/use-"),
@@ -247,7 +389,7 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # cannot break it again.
     ("Codex skill health", "Claude Code skill health"),
     (
-        "Use the global v2 inspector's `current_home_readiness`, not `all_discovered_homes_readiness`. Require rules and skills in the current Codex home, the matching MCP package, and a `home_binding` to that same home; shared `~/.agents/skills` copies do not satisfy readiness.",
+        "Use the global v3 inspector's `current_home_readiness`, not `all_discovered_homes_readiness`. Require rules and skills in the current Codex home, the matching MCP package, and a `home_binding` to that same home; shared `~/.agents/skills` copies prevent readiness until migrated.",
         "Use the global inspector's `ouroboros` component. Require a supported CLI and a plugin-scoped MCP registration that resolves; this host installs Ouroboros once as a plugin, so there is no per-home readiness, `home_binding`, or MCP package pin to require.",
     ),
     (
@@ -447,6 +589,11 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    probe[\"reason\"] = \"registration_not_connected\"\n"
         "    return {\"status\": \"degraded\", \"probe\": probe}\n",
     ),
+    # Upstream v0.1.17 changed one line of this function: the reported range,
+    # because `supported_ouroboros_version` dropped its `<0.54` bound. The
+    # replacement reports the same range, since `inspect_ouroboros_cli` still
+    # runs upstream's check and a bound it no longer enforces would contradict
+    # the `version_supported` reported beside it.
     (
         "def inspect_ouroboros(\n"
         "    repository: Path,\n"
@@ -460,7 +607,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        if cli_observation is not None\n"
         "        else inspect_ouroboros_cli(repository, timeout_seconds)\n"
         "    )\n"
-        "    tool[\"supported_range\"] = \">=0.51.1,<0.54.0\"\n"
+        "    tool[\"supported_range\"] = \">=0.51.1\"\n"
         "    environment = {\"CODEX_HOME\": str(codex_home)} if codex_home else None\n"
         "    tool[\"home_binding\"] = {\n"
         "        \"status\": \"unverifiable\",\n"
@@ -680,7 +827,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "        if cli_observation is not None\n"
         "        else inspect_ouroboros_cli(repository, timeout_seconds)\n"
         "    )\n"
-        "    tool[\"supported_range\"] = \">=0.51.1,<0.54.0\"\n"
+        "    tool[\"supported_range\"] = \">=0.51.1\"\n"
         "    tool[\"home_binding\"] = {\"status\": \"unverifiable\", \"reason\": \"home_not_applicable\"}\n"
         "    tool[\"runtime_package\"] = {\n"
         "        \"status\": \"unverifiable\",\n"
@@ -803,56 +950,83 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    tool[\"status\"] = \"configured\" if components_ready else \"degraded\"\n"
         "    return tool\n",
     ),
-    # Upstream installs Humanizer into the shared cross-agent root and im-not-ai
-    # into the active Codex home, and `inspect_writing_skill` marks a tool ready
-    # only when the one discovered installation sits at this exact target. The
-    # substituted `skill_roots()` searches the Claude Code roots alone, so both
-    # targets are unreachable by construction and every correct installation
-    # would report `degraded` against a path on another host — the same failure
-    # the Mulgae and Gaori probes had. `skill_roots()` is never empty, and its
-    # first entry is the effective root, `CLAUDE_CONFIG_DIR` included. This
-    # leaves `effective_codex_skill_root` defined without callers.
+    # Upstream v0.1.17 expects Humanizer in the shared cross-agent root, or in
+    # the active Codex home when only that one holds it, and im-not-ai in the
+    # active Codex home, and searches both roots through the new `roots`
+    # parameter. Claude Code loads neither, so both tools would report every
+    # correct installation as missing, and `inspect_writing_skill` marks a tool
+    # ready only when the one discovered installation sits at the expected
+    # target. Both functions are replaced whole: v0.1.17 changed the target the
+    # one-line Humanizer rule anchored on, added `roots`, and renamed both
+    # release pins to minimum versions, and a whole-function anchor fails loudly
+    # on the next such change instead of drifting. The target is
+    # `skill_roots()[0]`, the effective root with `CLAUDE_CONFIG_DIR` included,
+    # and omitting `roots` falls back to the substituted `skill_roots()`, which
+    # searches the Claude Code roots alone.
     (
-        '        expected_target=Path.home() / ".agents/skills/humanizer",\n',
-        '        expected_target=skill_roots()[0] / "humanizer",\n',
+        "def inspect_humanizer() -> dict[str, Any]:\n"
+        "    return inspect_writing_skill(\n"
+        "        skill_name=\"humanizer\",\n"
+        "        expected_files=HUMANIZER_SKILL_FILES,\n"
+        "        expected_target=humanizer_expected_target(),\n"
+        "        minimum_version=HUMANIZER_MINIMUM_VERSION,\n"
+        "        roots=humanizer_skill_roots(),\n"
+        "    )\n",
+        "def inspect_humanizer() -> dict[str, Any]:\n"
+        "    # Upstream expects Humanizer in the shared cross-agent root, or in the\n"
+        "    # active `CODEX_HOME` skill root when only that one holds it, and searches\n"
+        "    # both. Claude Code loads neither, so the target is the effective Claude\n"
+        "    # Code root, and with no `roots` the search falls back to `skill_roots()`,\n"
+        "    # which covers the Claude Code roots alone.\n"
+        "    return inspect_writing_skill(\n"
+        "        skill_name=\"humanizer\",\n"
+        "        expected_files=HUMANIZER_SKILL_FILES,\n"
+        "        expected_target=skill_roots()[0] / \"humanizer\",\n"
+        "        minimum_version=HUMANIZER_MINIMUM_VERSION,\n"
+        "    )\n",
     ),
     (
         "def inspect_im_not_ai() -> dict[str, Any]:\n"
         "    try:\n"
-        "        target = Path.home() / \".agents/skills/humanize-korean\"\n"
+        "        root = effective_codex_skill_root()\n"
+        "        target = root / \"humanize-korean\"\n"
+        "        shared_root = Path.home() / \".agents/skills\"\n"
+        "        roots = (root, shared_root) if root != shared_root else (root,)\n"
         "    except (OSError, ValueError, RuntimeError):\n"
         "        target = None\n"
+        "        roots = None\n"
         "    result = inspect_writing_skill(\n"
         "        skill_name=\"humanize-korean\",\n"
         "        expected_files=HUMANIZE_KOREAN_SKILL_FILES,\n"
         "        expected_target=target,\n"
-        "        supported_release=IM_NOT_AI_SUPPORTED_RELEASE,\n"
+        "        minimum_version=IM_NOT_AI_MINIMUM_VERSION,\n"
         "        require_version=False,\n"
+        "        roots=roots,\n"
         "    )\n"
         "    if target is None:\n"
         "        result[\"reason\"] = \"home_resolution_failed\"\n"
         "    return result\n",
         "def inspect_im_not_ai() -> dict[str, Any]:\n"
-        "    # Upstream v0.1.16 hard-codes the shared cross-agent root regardless of\n"
-        "    # `CODEX_HOME`, still unreachable here. The substituted `skill_roots()`\n"
-        "    # already guards the configured root and is never empty, so the target\n"
-        "    # here stays unconditional and reads exactly like its Humanizer sibling,\n"
-        "    # which is also what keeps every expected target in this file pointing at\n"
-        "    # the Claude Code root.\n"
+        "    # Upstream targets the active `CODEX_HOME` skill root and also searches the\n"
+        "    # shared cross-agent root, both unreachable here, so this reads exactly\n"
+        "    # like its Humanizer sibling. The substituted `skill_roots()` already\n"
+        "    # guards the configured root and is never empty, so the target stays\n"
+        "    # unconditional and upstream's resolution guard has no counterpart.\n"
         "    return inspect_writing_skill(\n"
         "        skill_name=\"humanize-korean\",\n"
         "        expected_files=HUMANIZE_KOREAN_SKILL_FILES,\n"
         "        expected_target=skill_roots()[0] / \"humanize-korean\",\n"
-        "        supported_release=IM_NOT_AI_SUPPORTED_RELEASE,\n"
+        "        minimum_version=IM_NOT_AI_MINIMUM_VERSION,\n"
         "        require_version=False,\n"
         "    )\n",
     ),
     # v0.1.15 added a presence-only trust table for the paired and third-party
-    # skills, hard-coded under the shared cross-agent root and, for im-not-ai,
-    # the active Codex home. Claude Code loads neither, so every one of these
-    # checks would look where this host never reads and report a correct
-    # installation as absent. `skill_roots()[0]` is the effective Claude Code
-    # root, `CLAUDE_CONFIG_DIR` included, and the same root the installation
+    # skills, hard-coded under the shared cross-agent root; v0.1.17 resolves
+    # the Humanizer entry through `humanizer_expected_target()` and im-not-ai's
+    # through the active Codex home. Claude Code loads neither root, so every
+    # one of these checks would look where this host never reads and report a
+    # correct installation as absent. `skill_roots()[0]` is the effective Claude
+    # Code root, `CLAUDE_CONFIG_DIR` included, and the same root the installation
     # proposals target. The Python spelling carries no tilde, so the
     # `~/.agents/skills` needle never saw these; the needle is `.agents/skills`
     # now, which is what makes a future one abort instead of shipping.
@@ -874,8 +1048,8 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            \"lore-commits\": Path.home() / \".agents/skills/lore-commits\",\n"
         "            \"lore-query\": Path.home() / \".agents/skills/lore-query\",\n"
         "            \"deslop\": Path.home() / \".agents/skills/deslop\",\n"
-        "            \"humanizer\": Path.home() / \".agents/skills/humanizer\",\n"
-        "            \"humanize-korean\": Path.home() / \".agents/skills/humanize-korean\",\n"
+        "            \"humanizer\": humanizer_expected_target(),\n"
+        "            \"humanize-korean\": effective_codex_skill_root() / \"humanize-korean\",\n"
         "        }.items()\n"
         "    }\n",
         "    trusted_root = skill_roots()[0]\n"
@@ -900,6 +1074,34 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "            \"humanize-korean\",\n"
         "        )\n"
         "    }\n",
+    ),
+    # v0.1.17 added two helpers that resolve Humanizer's roots and target
+    # through the shared cross-agent root and `effective_codex_skill_root`. The
+    # Humanizer and trust-table rules above retire every caller, so both go
+    # rather than ship paths this host never reads. `effective_codex_skill_root`
+    # itself stays, defined without callers, which `tests/validate.rb` pins with
+    # upstream's other uncalled helpers.
+    (
+        "def humanizer_skill_roots() -> tuple[Path, ...]:\n"
+        "    return tuple(\n"
+        "        dict.fromkeys((effective_codex_skill_root(), Path.home() / \".agents/skills\"))\n"
+        "    )\n"
+        "\n"
+        "\n",
+        "",
+    ),
+    (
+        "def humanizer_expected_target() -> Path:\n"
+        "    shared = Path.home() / \".agents/skills/humanizer\"\n"
+        "    active = effective_codex_skill_root() / \"humanizer\"\n"
+        "    if (active.exists() or active.is_symlink()) and not (\n"
+        "        shared.exists() or shared.is_symlink()\n"
+        "    ):\n"
+        "        return active\n"
+        "    return shared\n"
+        "\n"
+        "\n",
+        "",
     ),
     # Lore and Deslop discover installations by walking `skill_roots()`, which
     # the rule above narrows to the Claude Code roots, and then require the one
@@ -1476,10 +1678,10 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ),
     # `inspect_ouroboros.py` measures per-home rules, skills, and MCP registration
     # for the other host and is excluded, so the import that would fail at startup
-    # goes with it, and the bundled development channel's component leaves the
-    # catalog rather than probing an installer this artifact does not ship.
-    # Ouroboros itself stays: the shrunken component below calls the project
-    # inspector's plugin-scoped probe.
+    # goes with it, and the components of the bundled development channel and,
+    # since v0.1.17, the bundled status runtime leave the catalog rather than
+    # probing installers this artifact does not ship. Ouroboros itself stays: the
+    # shrunken component below calls the project inspector's plugin-scoped probe.
     (
         "from inspect_ouroboros import InvalidCodexHome, inspect_ouroboros\n",
         "",
@@ -1488,6 +1690,7 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "    \"podway\",\n"
         "    \"ouroboros\",\n"
         "    \"aquarium-dev\",\n"
+        "    \"aquarium-status\",\n"
         ")\n",
         "    \"podway\",\n"
         "    \"ouroboros\",\n"
@@ -1575,6 +1778,50 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "                else \"probe_failed\",\n"
         "                \"problem\": str(error),\n"
         "            }\n",
+        "",
+    ),
+    # v0.1.17 bundled an `aquarium-status` runtime under `tools/`, which this
+    # artifact never copies, and its component probe executes that runtime's
+    # installer in process. The component left the catalog above, so the parser
+    # rejects it and the default run never requests it; the probe and its call
+    # site go the way of the development channel's rather than ship a loader
+    # for a file that does not exist.
+    (
+        "def inspect_aquarium_status() -> dict[str, Any]:\n"
+        "    script = Path(__file__).resolve().parents[3] / \"tools/aquarium-status/install.py\"\n"
+        "    spec = importlib.util.spec_from_file_location(\"aquarium_status_installer\", script)\n"
+        "    if spec is None or spec.loader is None:\n"
+        "        raise InspectionError(\n"
+        "            \"inspector_unavailable\", \"aquarium-status inspector is unavailable\"\n"
+        "        )\n"
+        "    module = importlib.util.module_from_spec(spec)\n"
+        "    spec.loader.exec_module(module)\n"
+        "    payload = module.diagnose(script.parent)\n"
+        "    required = {\n"
+        "        \"schema\",\n"
+        "        \"status\",\n"
+        "        \"bundled\",\n"
+        "        \"installed\",\n"
+        "        \"launcher\",\n"
+        "        \"runtime_root\",\n"
+        "        \"action\",\n"
+        "    }\n"
+        "    if (\n"
+        "        not isinstance(payload, dict)\n"
+        "        or set(payload) != required\n"
+        "        or payload.get(\"schema\") != \"aquarium-status-runtime-inspection/v1\"\n"
+        "    ):\n"
+        "        raise InspectionError(\n"
+        "            \"inspection_failed\", \"aquarium-status inspection contract is invalid\", 1\n"
+        "        )\n"
+        "    return payload\n"
+        "\n"
+        "\n",
+        "",
+    ),
+    (
+        "    if \"aquarium-status\" in requested_components:\n"
+        "        tools[\"aquarium-status\"] = inspect_aquarium_status()\n",
         "",
     ),
     (
@@ -1701,6 +1948,12 @@ FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("${PLUGIN_ROOT}", "Claude Code expands ${CLAUDE_PLUGIN_ROOT}; add a data substitution"),
     (".codex/config", "Claude Code registers MCP servers in .claude.json and .mcp.json; add a substitution rule"),
     ("Codex", "add a substitution rule, an override, or a reviewed exemption"),
+    # The production-setup ledger runtime and its specification are excluded
+    # with the `status` skill; generated text naming either would send a Claude
+    # session to a runtime this artifact does not ship, or to the other host's
+    # copy of it on the same machine.
+    ("aquarium-status", "the ledger runtime is excluded; delete or rewrite the reference"),
+    ("production-status", "the ledger specification is excluded; delete or rewrite the reference"),
 )
 
 # Almost every lowercase `$name` in upstream Markdown is a Codex skill
@@ -1724,6 +1977,21 @@ SIGIL = re.compile(r"\$[a-z][a-z0-9:_-]*")
 SIGIL_LITERALS: tuple[str, ...] = (
     "$aquarium_commit_name",
     "$aquarium_commit_email",
+)
+
+# Phrases the forbidden scan tolerates inside files that are never rewritten,
+# each paired with the glob its tolerance is limited to. Podway requires the
+# installed Procedure copies to match the bundled bytes, so v0.1.17's route
+# labels and criteria that call the host-native review route "native Codex"
+# must ship as upstream wrote them; the prose elsewhere says native Claude
+# Code. Only the phrase is masked, and only where it starts a word, so a word
+# such as "alternative" never hides behind it; every other needle still
+# applies, and `check_canonical_phrases` stops generation when a phrase no
+# longer occurs or its scope reaches a file a rule could rewrite. `fnmatch`
+# lets `*` cross `/`.
+CANONICAL_PHRASES: tuple[tuple[str, str], ...] = (
+    ("assets/podway/procedures/*.yaml", "native Codex"),
+    ("assets/podway/procedures/*.yaml", "Native Codex"),
 )
 
 
@@ -1851,6 +2119,59 @@ def check_excluded_files() -> None:
             )
 
 
+def check_excluded_skills() -> None:
+    """Refuse a skill exclusion whose skill no longer exists upstream.
+
+    Same contract as `check_excluded_files`. An addition may not live under an
+    excluded skill either: once the directory is gone, `apply_additions` could no
+    longer see the collision that makes such a file an override's job.
+    """
+    for name, _reason in EXCLUDED_SKILLS:
+        if not (UPSTREAM_PLUGIN / "skills" / name / "SKILL.md").is_file():
+            raise SyncError(
+                f"skill exclusion targets `{name}`, which upstream no longer ships; "
+                "remove the exclusion or retarget it"
+            )
+        prefix = f"skills/{name}/"
+        inside = [relative for relative in ADDED_PATHS if relative.startswith(prefix)]
+        if inside:
+            raise SyncError(
+                f"additions live under the excluded skill `{name}`: " + ", ".join(inside)
+            )
+
+
+def check_canonical_phrases() -> None:
+    """Refuse a canonical-phrase tolerance that no longer guards anything real.
+
+    Each phrase must hold a forbidden needle, or the tolerance is dead weight;
+    it must still occur upstream inside its scope, or it would mask the next
+    phrase that happens to spell it; and its scope may reach only files no rule
+    rewrites, because the tolerance exists only for bytes this artifact must not
+    change.
+    """
+    needles = [needle for needle, _remedy in FORBIDDEN]
+    for scope, phrase in CANONICAL_PHRASES:
+        if not any(needle in phrase for needle in needles):
+            raise SyncError(f"canonical phrase `{phrase}` holds no forbidden needle; remove it")
+        scoped = [
+            path
+            for path in sorted(UPSTREAM_PLUGIN.rglob("*"))
+            if path.is_file()
+            and fnmatch.fnmatchcase(path.relative_to(UPSTREAM_PLUGIN).as_posix(), scope)
+        ]
+        rewritten = [path for path in scoped if rules_for(path) is not None]
+        if rewritten:
+            raise SyncError(
+                f"canonical phrase scope `{scope}` reaches rewritten files: "
+                + ", ".join(str(path.relative_to(UPSTREAM_PLUGIN)) for path in rewritten)
+            )
+        if not any(canonical_phrase_pattern(phrase).search(path.read_text(encoding="utf-8")) for path in scoped):
+            raise SyncError(
+                f"canonical phrase `{phrase}` no longer occurs upstream in `{scope}`; "
+                "remove it so it cannot mask a future mention"
+            )
+
+
 def check_sigil_literals() -> None:
     """Refuse a sigil exception whose token no longer occurs in any source Markdown.
 
@@ -1949,6 +2270,15 @@ def remove_excluded(destination: Path) -> list[str]:
         (destination / relative).unlink()
         excluded.append(relative)
     return excluded
+
+
+def remove_excluded_skills(destination: Path) -> list[str]:
+    """Delete excluded skills whole, before any rule counts their text."""
+    removed: list[str] = []
+    for name, _reason in EXCLUDED_SKILLS:
+        shutil.rmtree(destination / "skills" / name)
+        removed.append(name)
+    return removed
 
 
 def transform_skills(destination: Path) -> None:
@@ -2213,6 +2543,19 @@ def write_plugin_manifest(destination: Path) -> None:
     )
 
 
+def canonical_phrase_pattern(phrase: str) -> re.Pattern[str]:
+    """Match a tolerated phrase only where it starts a word."""
+    return re.compile(rf"(?<![A-Za-z]){re.escape(phrase)}")
+
+
+def mask_canonical_phrases(text: str, relative: Path) -> str:
+    """Remove the tolerated phrases from one file's text before the needle scan."""
+    for scope, phrase in CANONICAL_PHRASES:
+        if fnmatch.fnmatchcase(relative.as_posix(), scope):
+            text = canonical_phrase_pattern(phrase).sub("", text)
+    return text
+
+
 def check_forbidden(destination: Path, codex_exemptions: set[str]) -> None:
     """Scan every generated text file for host-specific text.
 
@@ -2221,14 +2564,15 @@ def check_forbidden(destination: Path, codex_exemptions: set[str]) -> None:
     is not a match, because the needle is `Codex` rather than `CODEX`.
 
     Only the `Codex` needle is skipped, and only for reviewed exemptions; every
-    other needle applies to every file.
+    other needle applies to every file. A byte-canonical file has only its
+    `CANONICAL_PHRASES` masked, so any other forbidden text in it still fails.
     """
     failures: list[str] = []
     for path in sorted(destination.rglob("*")):
         if not path.is_file() or path.suffix not in SCANNED_SUFFIXES:
             continue
         relative = path.relative_to(destination)
-        text = path.read_text(encoding="utf-8")
+        text = mask_canonical_phrases(path.read_text(encoding="utf-8"), relative)
         for needle, remedy in FORBIDDEN:
             if needle == "Codex" and str(relative) in codex_exemptions:
                 continue
@@ -2330,15 +2674,35 @@ def check_generated_python(destination: Path) -> None:
 
 
 def check_excluded_references(destination: Path) -> None:
-    """Fail when generated text still names a file the exclusion removed."""
+    """Fail when generated text still names something an exclusion removed.
+
+    Files are matched by basename. A skill is matched by its invocation and its
+    directory paths, but not by its bare name: `status` is an ordinary word. An
+    excluded plugin-root directory hides everything upstream puts under it, so
+    a path into any of its children fails too — v0.1.17 added a second tool
+    under the excluded `tools/` with no abort.
+    """
+    needles: list[tuple[str, re.Pattern[str] | str]] = [
+        (relative, Path(relative).name) for relative, _reason in EXCLUDED_FILES
+    ]
+    for name, _reason in EXCLUDED_SKILLS:
+        needles.append((f"skills/{name}", re.compile(rf"aquarium:{re.escape(name)}(?![A-Za-z0-9_-])")))
+        needles.append((f"skills/{name}", f"skills/{name}/"))
+        needles.append((f"skills/{name}", f"../{name}/"))
+    for name, _reason in EXCLUDED_PLUGIN_ROOT:
+        source = UPSTREAM_PLUGIN / name
+        if source.is_dir():
+            for child in sorted(source.iterdir()):
+                needles.append((f"{name}/{child.name}", f"{name}/{child.name}"))
     failures: list[str] = []
-    for relative, _reason in EXCLUDED_FILES:
-        basename = Path(relative).name
-        for path in sorted(destination.rglob("*")):
-            if not path.is_file() or path.suffix not in SCANNED_SUFFIXES:
-                continue
-            if basename in path.read_text(encoding="utf-8"):
-                failures.append(f"  {path.relative_to(destination)}: references excluded `{relative}`")
+    for path in sorted(destination.rglob("*")):
+        if not path.is_file() or path.suffix not in SCANNED_SUFFIXES:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for excluded, needle in needles:
+            found = needle.search(text) if isinstance(needle, re.Pattern) else needle in text
+            if found:
+                failures.append(f"  {path.relative_to(destination)}: references excluded `{excluded}`")
     if failures:
         raise SyncError(
             "generated text references an excluded file:\n"
@@ -2353,6 +2717,7 @@ def write_sync_manifest(
     commit: str,
     overrides: list[str],
     excluded: list[str],
+    excluded_skills: list[str],
     additions: list[str],
 ) -> None:
     files = {
@@ -2367,6 +2732,7 @@ def write_sync_manifest(
         },
         "overrides": overrides,
         "excluded": excluded,
+        "excluded_skills": excluded_skills,
         "excluded_plugin_root": [name for name, _reason in EXCLUDED_PLUGIN_ROOT],
         "additions": additions,
         "argument_hints": dict(sorted(ARGUMENT_HINTS.items())),
@@ -2381,9 +2747,12 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     commit = upstream_commit()
     codex_exemptions = check_codex_exemptions()
     check_excluded_files()
+    check_excluded_skills()
     check_sigil_literals()
+    check_canonical_phrases()
     copy_tree(destination)
     excluded = remove_excluded(destination)
+    excluded_skills = remove_excluded_skills(destination)
     usage = transform_text(destination, set(load_override_manifest()))
     check_rule_usage(usage)
     # Overrides replace whole files, so they run before gating. Otherwise an
@@ -2399,7 +2768,13 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     check_excluded_references(destination)
     check_required(destination)
     write_sync_manifest(
-        destination, upstream_manifest()["repository"], commit, overrides, excluded, additions
+        destination,
+        upstream_manifest()["repository"],
+        commit,
+        overrides,
+        excluded,
+        excluded_skills,
+        additions,
     )
     return commit, overrides
 
@@ -2464,7 +2839,7 @@ def main() -> int:
     print(f"  {gated} gated against model invocation, {len(skills) - gated} model-invocable")
     print(
         f"  {len(overrides)} overrides applied, "
-        f"{len(EXCLUDED_FILES) + len(EXCLUDED_PLUGIN_ROOT)} upstream entries excluded, "
+        f"{len(EXCLUDED_FILES) + len(EXCLUDED_SKILLS) + len(EXCLUDED_PLUGIN_ROOT)} upstream entries excluded, "
         f"{len(ADDED_PATHS)} host-only files added"
     )
     return 0

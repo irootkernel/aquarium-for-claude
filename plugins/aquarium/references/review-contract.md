@@ -1,6 +1,6 @@
 # Static Review Contract
 
-Use this contract for one static, read-only review through `/aquarium:independent-review` or `/aquarium:orca-review`. Read [review-intent-contract.md](review-intent-contract.md) for the Review Brief and change-versus-completion semantics, then read [finding-disposition.md](finding-disposition.md) for adjudication and remediation. The two workflows share target meaning, consent, reviewer restrictions, adjudication, and technical verdict rules, but each backend owns its own target acquisition and lifecycle.
+Use this contract for one static, read-only review through `/aquarium:independent-review` or `/aquarium:orca-review`, including an explicitly approved Orca delegation from a Task, Epic, or validation handler. Read [review-intent-contract.md](review-intent-contract.md) for the Review Brief and change-versus-completion semantics, [review-routing-contract.md](review-routing-contract.md) for embedded selection and evidence, then [finding-disposition.md](finding-disposition.md) for adjudication and remediation. The two workflows share target meaning, consent, reviewer restrictions, adjudication, and technical verdict rules, but each backend owns its own target acquisition and lifecycle.
 
 ## Exact target
 
@@ -29,7 +29,7 @@ Do not inventory callers, traverse adjacent modules, search for unrelated or pre
 
 ## Selection and consent
 
-For a task or epic, read the canonical roadmap and linked authority, resolve one unambiguous source scope and revision, and otherwise ask the user to choose among concrete eligible targets. For a special request, establish the exact question and require confirmation of one scope and applicable revision. An explicit request naming the target and reviewer authorizes transmission of that selected scope only.
+For a task or epic, read the canonical roadmap and linked authority, resolve one unambiguous source scope and revision, and otherwise ask the user to choose among concrete eligible targets. For a special request, establish the exact question and require confirmation of one scope and applicable revision. An explicit request naming the target and reviewer authorizes transmission of that selected scope only. An approved handler envelope may supply the same authority when it records the exact target, reviewer, Review Brief, and source-transmission scope. The delegated review remains report-only and returns its native result to the handler; it does not acquire handler remediation, staging, commit, or lifecycle authority.
 
 Inspect and report staged, unstaged, non-ignored untracked, and conflicted state before transmission. Independent Review's inspectors record ignored state only as structural evidence, and Orca Review does not inventory ignored runtime files or compare them before and after review. Do not stage, edit, clean, stash, checkout, or otherwise normalize it. A conflict or unsafe candidate stops the review. State outside the selected scope is excluded but remains technically readable by same-user processes; disclose that boundary.
 

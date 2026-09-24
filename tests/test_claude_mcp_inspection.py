@@ -260,7 +260,23 @@ class GlobalInspectorTest(unittest.TestCase):
 
     def test_component_set_matches_what_this_edition_ships(self) -> None:
         self.assertIn("ouroboros", self.module.GLOBAL_COMPONENTS)
-        self.assertNotIn("aquarium-dev", self.module.GLOBAL_COMPONENTS)
+        for excluded in ("aquarium-dev", "aquarium-status"):
+            with self.subTest(component=excluded):
+                self.assertNotIn(excluded, self.module.GLOBAL_COMPONENTS)
+
+    def test_the_status_runtime_probe_is_gone(self) -> None:
+        """v0.1.17's probe loads an installer under `tools/`, which this artifact never ships."""
+        self.assertFalse(hasattr(self.module, "inspect_aquarium_status"))
+        argv = ["inspect_global_tools.py", "--component", "aquarium-status"]
+        with mock.patch.object(sys, "argv", argv):
+            with self.assertRaises(self.module.InspectionError) as raised:
+                self.module.parse_arguments()
+        self.assertEqual(raised.exception.code, "invalid_arguments")
+        # The same parser still accepts a component this edition ships, so the
+        # rejection above is the removed choice and not a parser that fails.
+        argv = ["inspect_global_tools.py", "--component", "ouroboros"]
+        with mock.patch.object(sys, "argv", argv):
+            self.assertEqual(self.module.parse_arguments().component, ("ouroboros",))
 
     def test_the_per_home_options_are_gone_from_the_parser(self) -> None:
         for flag in ("--codex-home", "--verify-ouroboros-release"):
@@ -326,6 +342,89 @@ class ClaudeSkillRootTest(unittest.TestCase):
             self.assertEqual(
                 Path(result["expected_target"]).parent, self.config_dir / "skills"
             )
+
+
+class ClaudeWritingSkillTest(unittest.TestCase):
+    """Humanizer and im-not-ai are found in the Claude Code skill roots alone.
+
+    v0.1.17 passes the active Codex home and the shared cross-agent root to a
+    new `roots` argument and expects the installation in one of them. The
+    generated functions pass no `roots`, so discovery walks `skill_roots()`, and
+    a copy only another host loads is not an installation here. `HOME` and
+    `CLAUDE_CONFIG_DIR` both point into a temporary directory, and `CODEX_HOME`
+    is unset so `HOME/.codex` is the Codex home a regression would search.
+    """
+
+    def setUp(self) -> None:
+        self.module = load_inspector()
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        base = Path(self.temporary.name).resolve()
+        self.home = base / "home"
+        self.home.mkdir()
+        self.config_dir = base / "config"
+        self.config_dir.mkdir()
+        environment = mock.patch.dict(
+            os.environ, {"HOME": str(self.home), "CLAUDE_CONFIG_DIR": str(self.config_dir)}
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop("CODEX_HOME", None)
+        self.skills = {
+            "humanizer": (
+                self.module.inspect_humanizer,
+                self.module.HUMANIZER_SKILL_FILES,
+                self.module.HUMANIZER_MINIMUM_VERSION,
+            ),
+            "humanize-korean": (
+                self.module.inspect_im_not_ai,
+                self.module.HUMANIZE_KOREAN_SKILL_FILES,
+                self.module.IM_NOT_AI_MINIMUM_VERSION,
+            ),
+        }
+
+    def install(self, root: Path, name: str) -> Path:
+        """Write a structurally valid copy one minor release past the minimum."""
+        _inspect, files, minimum = self.skills[name]
+        major, minor, _patch = minimum.split(".")
+        directory = root / name
+        for relative in files:
+            path = directory / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"{relative}\n")
+        (directory / "SKILL.md").write_text(
+            f"---\nname: {name}\nversion: {major}.{int(minor) + 1}.0\n---\n"
+        )
+        return directory
+
+    def install_other_host_copies(self, name: str) -> None:
+        for root in (self.home / ".agents/skills", self.home / ".codex/skills"):
+            self.install(root, name)
+
+    def test_other_host_copies_are_not_installations(self) -> None:
+        for name, (inspect, _files, _minimum) in self.skills.items():
+            with self.subTest(skill=name):
+                self.install_other_host_copies(name)
+                result = inspect()
+                self.assertEqual(result["expected_target"], str(self.config_dir / "skills" / name))
+                self.assertEqual(result["agent_skill"]["installations"], [])
+                self.assertEqual(result["status"], "missing")
+                self.assertFalse(result["installed"])
+
+    def test_a_valid_copy_in_the_config_root_is_the_one_installation(self) -> None:
+        for name, (inspect, _files, minimum) in self.skills.items():
+            with self.subTest(skill=name):
+                self.install_other_host_copies(name)
+                expected = self.install(self.config_dir / "skills", name)
+                result = inspect()
+                self.assertEqual(result["expected_target"], str(expected))
+                self.assertEqual(
+                    [entry["path"] for entry in result["agent_skill"]["installations"]],
+                    [str(expected)],
+                )
+                self.assertEqual(result["supported_range"], f">={minimum}")
+                self.assertTrue(result["version_supported"])
+                self.assertTrue(result["installed"])
 
 
 class ClaudeOuroborosInspectionTest(unittest.TestCase):
@@ -410,6 +509,15 @@ class ClaudeOuroborosInspectionTest(unittest.TestCase):
         self.assertEqual(tool["mcp_runtime"]["probe"]["reason"], "plugin_launcher_configured")
         self.assertEqual(tool["status"], "configured")
         self.assertEqual(self.doctor_calls, [])
+
+    def test_the_reported_range_matches_the_uncapped_check(self) -> None:
+        """v0.1.17 dropped the `<0.54` cap; the replacement must not keep reporting it."""
+        self.probes["--version"] = dict(self.VERSION_OK, stdout="Ouroboros version 0.60.0")
+        tool = self.inspect()
+        self.assertEqual(tool["version"], "0.60.0")
+        self.assertTrue(tool["version_supported"])
+        self.assertEqual(tool["supported_range"], ">=0.51.1")
+        self.assertEqual(tool["status"], "configured")
 
     def test_missing_claude_leaves_every_component_unverifiable(self) -> None:
         self.executables.pop("claude")

@@ -1,8 +1,8 @@
 {
-  "references/review-contract.md": "b6d6853aa54d9f0ec0a1ad73860e939a859e22f037a58ddc9e74a67e1bf6d43b",
-  "references/review-intent-contract.md": "df08204d3d060d3eb1700fd471a6479bd356f006563aa1bdef9e00c2a490f09b",
-  "references/tool-catalog.md": "ae61b4238edb02f4a218af5e8c849293cf6b09e6741e28c70096f8e5fbca3d24",
-  "skills/dev-setup-global/SKILL.md": "127b3d665ebc8adc1a2ee11e5e19c92f75515b3c4576f438234928669390803c",
+  "references/review-contract.md": "4b525e62fabfdea91d314b7bbe293344f507f858c2ff1cee090bcb93f0b4d853",
+  "references/review-intent-contract.md": "e7bfe9978940e4420a2191c5c3ac2f045b164311510b4ab6d62d07d4402aab75",
+  "references/tool-catalog.md": "1edbf842ad645adb3df5f2c50d05de96fab93c32c8fd65daf3d92991ed677bde",
+  "skills/dev-setup-global/SKILL.md": "677eb74cbc76f8b86992d544a54ea2c0624d4075ce400a85a8b6a1d0c87f3695",
   "skills/dev-setup/references/agents-guidance.md": "80a373d1b9d44f4a9635fc805f423493508db5c2973cee120a2a260d651e5ef1",
   "skills/independent-review/SKILL.md": "55d0aa2b8a0a1b8bff3762e6650fbb3459b2ce6e295eb0bcaa3a358a5532c87b"
 }

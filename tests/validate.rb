@@ -93,20 +93,22 @@ skill_paths.each do |path|
 end
 
 if UPSTREAM_PLUGIN.directory?
-  # The generated skill set is the upstream set plus every skill carried in
-  # from additions/; the sync manifest is the single source for the latter.
+  # The generated skill set is the upstream set, minus the skills this edition
+  # excludes whole, plus every skill carried in from additions/; the sync
+  # manifest is the single source for both, and the exclusion list is compared
+  # with scripts/sync.py below.
   upstream_skills = Pathname.glob(UPSTREAM_PLUGIN.join("skills/*/SKILL.md")).map { |p| p.dirname.basename.to_s }.sort
   addition_skills = sync_manifest.fetch("additions").map { |p| p[%r{\Askills/([^/]+)/SKILL\.md\z}, 1] }.compact
-  expected = (upstream_skills + addition_skills).sort
+  expected = (upstream_skills - sync_manifest.fetch("excluded_skills") + addition_skills).sort
   generated = skill_paths.map { |p| p.dirname.basename.to_s }.sort
-  assert(generated == expected, "generated skills do not match upstream plus additions: #{(generated - expected) | (expected - generated)}")
+  assert(generated == expected, "generated skills do not match upstream minus exclusions plus additions: #{(generated - expected) | (expected - generated)}")
 end
 
 # --- host-neutral generated text -------------------------------------------
 
 FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$create-", "$lore-", "$orca-cli", "request_user_input",
                   "--agent codex", ".agents/skills", "${PLUGIN_ROOT}", ".codex/config",
-                  "Codex"].freeze
+                  "Codex", "aquarium-status", "production-status"].freeze
 
 # Lowercase `$name` tokens that are shell variables rather than skill sigils, so
 # the scan below subtracts them. v0.1.14 pinned the commit identity through
@@ -124,11 +126,47 @@ CODEX_EXEMPTIONS = begin
   path.file? ? JSON.parse(path.read).keys.to_set : Set.new
 end
 
+# Podway requires the installed Procedure copies to match the bundled bytes, so
+# the Procedures that label the `native-codex` route with the other host's name
+# can never be rewritten. Only these phrases are masked, only in files matching
+# their scope, and only where they start a word, so "alternative Codex" is never
+# mistaken for the label; any other forbidden text there still fails.
+# scripts/sync.py keeps the same table and stops when a phrase no longer occurs.
+# `File.fnmatch` without FNM_PATHNAME lets `*` cross `/`, exactly as Python's
+# `fnmatch` does.
+CANONICAL_PHRASES = [
+  ["assets/podway/procedures/*.yaml", "native Codex"],
+  ["assets/podway/procedures/*.yaml", "Native Codex"]
+].freeze
+
+def canonical_phrase_pattern(phrase)
+  /(?<![A-Za-z])#{Regexp.escape(phrase)}/
+end
+
+def mask_canonical_phrases(text, relative)
+  CANONICAL_PHRASES.reduce(text) do |masked, (scope, phrase)|
+    File.fnmatch(scope, relative) ? masked.gsub(canonical_phrase_pattern(phrase), "") : masked
+  end
+end
+
+assert(
+  mask_canonical_phrases("Native Codex, native Codex, Codex CLI", "assets/podway/procedures/x.yaml").include?("Codex"),
+  "canonical-phrase masking must leave every other `Codex` in scope visible"
+)
+assert(
+  mask_canonical_phrases("native Codex", "references/x.md") == "native Codex",
+  "canonical-phrase masking must not apply outside its scope"
+)
+assert(
+  mask_canonical_phrases("alternative Codex", "assets/podway/procedures/x.yaml").include?("Codex"),
+  "canonical-phrase masking must match only where the phrase starts a word"
+)
+
 Pathname.glob(PLUGIN.join("**/*.{md,json,py,yaml}")).sort.each do |path|
   relative = path.relative_path_from(PLUGIN).to_s
   next if relative == "sync-manifest.json"
 
-  text = path.read
+  text = mask_canonical_phrases(path.read, relative)
   FORBIDDEN_TEXT.each do |needle|
     next if needle == "Codex" && CODEX_EXEMPTIONS.include?(relative)
 
@@ -176,14 +214,16 @@ EXTRACT_TABLES = <<~PYTHON
   import ast, json, pathlib
 
   tree = ast.parse(pathlib.Path("scripts/sync.py").read_text())
-  wanted = {"FORBIDDEN", "SIGIL_LITERALS", "EXCLUDED_PLUGIN_ROOT"}
+  wanted = {"FORBIDDEN", "SIGIL_LITERALS", "EXCLUDED_PLUGIN_ROOT", "EXCLUDED_SKILLS", "CANONICAL_PHRASES"}
+  whole_rows = {"CANONICAL_PHRASES"}
   found = {}
   for node in tree.body:
       target = getattr(node, "target", None)
       name = getattr(target, "id", None)
       if name in wanted:
           found[name] = [
-              element.elts[0].value if isinstance(element, ast.Tuple) else element.value
+              [part.value for part in element.elts] if name in whole_rows
+              else element.elts[0].value if isinstance(element, ast.Tuple) else element.value
               for element in node.value.elts
           ]
   missing = sorted(wanted - set(found))
@@ -211,6 +251,30 @@ assert(
   "#{(sync_tables.fetch('SIGIL_LITERALS').to_set - SIGIL_LITERALS.to_set).to_a.inspect}, " \
   "only in tests/validate.rb #{(SIGIL_LITERALS.to_set - sync_tables.fetch('SIGIL_LITERALS').to_set).to_a.inspect}"
 )
+
+# A Ruby-only phrase would let CI accept text generation rejects, and a
+# Python-only one would leave that text unguarded whenever the tree is checked
+# without regenerating it.
+assert(
+  sync_tables.fetch("CANONICAL_PHRASES").to_set == CANONICAL_PHRASES.to_set,
+  "canonical phrases disagree: only in scripts/sync.py " \
+  "#{(sync_tables.fetch('CANONICAL_PHRASES').to_set - CANONICAL_PHRASES.to_set).to_a.inspect}, " \
+  "only in tests/validate.rb #{(CANONICAL_PHRASES.to_set - sync_tables.fetch('CANONICAL_PHRASES').to_set).to_a.inspect}"
+)
+# Each phrase is tolerated only while it still occurs, and only in files that
+# are still byte-identical to upstream — the reason masking is allowed at all.
+CANONICAL_PHRASES.each do |scope, phrase|
+  scoped = Pathname.glob(PLUGIN.join("**/*")).select(&:file?).select do |path|
+    File.fnmatch(scope, path.relative_path_from(PLUGIN).to_s)
+  end
+  assert(scoped.any? { |path| path.read.match?(canonical_phrase_pattern(phrase)) }, "canonical phrase `#{phrase}` no longer occurs in #{scope}")
+  next unless UPSTREAM_PLUGIN.directory?
+
+  scoped.each do |path|
+    relative = path.relative_path_from(PLUGIN)
+    assert(path.binread == UPSTREAM_PLUGIN.join(relative).binread, "a file whose canonical phrases are masked must be byte-identical to upstream: #{relative}")
+  end
+end
 
 assert(
   skill_paths.any? { |path| path.read.include?("/aquarium:") },
@@ -275,6 +339,11 @@ if global_inspection.file?
   assert(!script.include?("InvalidCodexHome"), "the global inspector must not handle a Codex-home error it cannot raise")
   assert(!script.include?("codex_home"), "the global inspector must not carry per-home options")
   assert(!script.include?('"aquarium-dev",'), "the global inspector must not offer the excluded development channel")
+  # v0.1.17 made the production-status runtime a default component loaded from
+  # the plugin-root `tools/`, which this edition does not ship; a surviving
+  # loader would fail every unscoped global inspection.
+  assert(!script.include?("aquarium-status"), "the global inspector must not offer the excluded production-status runtime")
+  assert(!script.include?("tools/"), "the global inspector must not load anything from the excluded plugin-root tools/")
   assert(script.include?("inspector.inspect_ouroboros("), "the global inspector must keep the plugin-scoped Ouroboros probe")
   assert(script.include?("inspector.inspect_global_mcp_scope("), "the global inspector must take its user-scope MCP view from the project inspector's configuration read")
   assert(script.include?("inspector.skill_roots()[0]"), "the global inspector must diagnose canonical skills in the Claude Code skill root")
@@ -295,6 +364,16 @@ assert(
   ),
   "generated Python does not compile"
 )
+
+# v0.1.17 moved the writing-skill target choice into two helpers that pick the
+# other host's skill roots. They are deleted together with their last callers,
+# and the arity gate cannot see a call to a name it does not know, so a
+# reference that survived would fail only at run time.
+%w[humanizer_skill_roots humanizer_expected_target].each do |helper|
+  scripts.each do |path|
+    assert(!path.read.include?(helper), "generated Python still references the deleted #{helper}: #{path.relative_path_from(PLUGIN)}")
+  end
+end
 
 # --- manifests agree with upstream -----------------------------------------
 
@@ -410,6 +489,46 @@ excluded.each do |relative|
   basename = File.basename(relative)
   generated_text.each do |path|
     assert(!path.read.include?(basename), "generated text references the excluded #{relative}: #{path.relative_path_from(PLUGIN)}")
+  end
+end
+
+# A whole skill is excluded by name: `EXCLUDED_FILES` cannot express it, because
+# generation refuses a skill directory without `SKILL.md` and a basename check on
+# `SKILL.md` would match every skill. v0.1.17's `status` reports a ledger whose
+# runtime lives under the excluded plugin-root `tools/`.
+excluded_skills = sync_tables.fetch("EXCLUDED_SKILLS")
+assert(
+  sync_manifest.fetch("excluded_skills").sort == excluded_skills.sort,
+  "sync manifest skill exclusions #{sync_manifest.fetch('excluded_skills').inspect} " \
+  "do not match scripts/sync.py #{excluded_skills.inspect}"
+)
+excluded_skills.each do |name|
+  assert(!PLUGIN.join("skills", name).exist?, "excluded skill was generated: #{name}")
+  assert(UPSTREAM_PLUGIN.join("skills", name, "SKILL.md").file?, "skill exclusion targets a skill upstream no longer ships: #{name}") if UPSTREAM_PLUGIN.directory?
+  assert(sync_manifest.fetch("files").keys.none? { |key| key.start_with?("skills/#{name}/") }, "excluded skill is listed in the sync manifest: #{name}")
+  invocation = /aquarium:#{Regexp.escape(name)}(?![A-Za-z0-9_-])/
+  generated_text.each do |path|
+    text = path.read
+    assert(
+      !text.match?(invocation) && !text.include?("skills/#{name}/") && !text.include?("../#{name}/"),
+      "generated text references the excluded skill #{name}: #{path.relative_path_from(PLUGIN)}"
+    )
+  end
+end
+
+# An excluded plugin-root directory hides everything under it, including a tool
+# upstream adds later: v0.1.17's `tools/aquarium-status` arrived that way with no
+# abort. Generated text must never point into one of its children.
+if UPSTREAM_PLUGIN.directory?
+  excluded_plugin_root.each do |name|
+    source = UPSTREAM_PLUGIN.join(name)
+    next unless source.directory?
+
+    source.children.map { |child| "#{name}/#{child.basename}" }.each do |needle|
+      generated_text.each do |path|
+        assert(!path.read.include?(needle), "generated text references the excluded #{needle}: #{path.relative_path_from(PLUGIN)}")
+      end
+    end
   end
 end
 
@@ -545,6 +664,10 @@ assert((PHASE_SKILLS - generated_skills).empty?, "phase-skill exemptions name sk
 skill_rows = readme.scan(/^\| `([a-z0-9-]+)` \| /).flatten
 missing_rows = generated_skills - PHASE_SKILLS - skill_rows
 assert(missing_rows.empty?, "README Skills table lacks a row for generated skills: #{missing_rows.inspect}")
+# The reverse direction keeps an excluded or renamed skill from staying listed
+# as something the plugin ships.
+stale_rows = skill_rows - generated_skills
+assert(stale_rows.empty?, "README Skills table lists skills that are not generated: #{stale_rows.inspect}")
 
 # --- documentation convention ----------------------------------------------
 

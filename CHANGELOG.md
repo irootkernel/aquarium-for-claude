@@ -4,6 +4,19 @@ This file records concise shipped outcomes of the Aquarium for Claude edition. R
 
 ## v0.1.17 - Unreleased
 
+### Added
+
+- Guard exclusions that hide more than one file. v0.1.17 put its production-setup ledger runtime under the plugin-root `tools/` this edition already excludes, and nothing aborted: `EXCLUDED_SKILLS` now removes an upstream skill whole before any text rule runs and requires it to still exist upstream, generation and `tests/validate.rb` reject any generated reference to an excluded skill or into a child of an excluded plugin-root directory, and `aquarium-status` and `production-status` join the forbidden needles.
+- Tolerate byte-canonical route labels by phrase rather than by file. Three v0.1.17 Podway Procedures label the host-native review route with the other host's name, and Podway requires the installed copies to match the bundled bytes; `CANONICAL_PHRASES` masks only that phrase inside the Podway Procedure assets, generation stops when it no longer occurs or its scope reaches a rewritten file, and the validator mirrors the table and asserts that those files stay byte-identical to upstream.
+
+### Changed
+
+- Adopt upstream Aquarium v0.1.17: selectable Task, Epic, and cold-validation review routes — Mulgae by default, Orca, a fresh host-native subagent review, or an explicit waiver — with route-neutral evidence and a bounded convergence of three work-unit assessments followed by remediation confirmations, the assessment kind in the shared Review Brief, explicit dossier waivers, Epic-envelope commit authority and commit-only scope in `task-commit`, Podway v0.2.11, Mulgae v0.1.23 or newer with a ZCode, Grok, and Codex default portfolio, minimum-version installs for Humanizer, im-not-ai, and Ouroboros, and the retired Dolgorae release verifier.
+- Exclude upstream's production-setup status feature. The new `status` skill reports a private setup ledger through a runtime under the plugin-root `tools/`, and upstream wired that ledger into `dev-setup`, `dev-setup-bundle`, and the global inspector, where `dev-setup` would not begin a repository mutation until the runtime read the predecessor row. The runtime sits beside the excluded development channel and reports enrollment in it, specifies its record envelopes only in upstream's repository-level `docs/specs/`, and installs only on Apple Silicon macOS, so the skill is excluded whole, counted substitutions remove the ledger paragraphs from both setup skills, and script rules remove the inspector component whose loader would have failed every unscoped global inspection.
+- Keep the new routing contract true to the live Independent Review. v0.1.17 says Independent Review remains disabled and names the host-native route after the other host; here Independent Review stays a live standalone entry point that is not a selectable workflow route, the prose reads native Claude Code, and the `native-codex` route ID and the Podway Procedure labels keep upstream's bytes.
+- Re-derive the four overrides v0.1.17 touched from its text: `review-contract.md` ports the handler-delegated consent rule scoped to Orca, `review-intent-contract.md` ports the assessment kind and the routing link, `tool-catalog.md` ports the Dolgorae, Mulgae, Podway, Humanizer, im-not-ai, and Ouroboros facts without the production-status section or the other host's skill homes, and `dev-setup-global` drops the retired Dolgorae verifier flag and the status runtime. The catalog's `Codex` exemption now also covers Mulgae's default-portfolio provider.
+- Re-derive the script rules v0.1.17 killed from the new upstream functions: the writing-skill inspectors expect Humanizer and im-not-ai in the Claude Code skill root through the renamed minimum-version constants, the two helpers that chose the other host's roots are deleted with their last callers, the Ouroboros probe reports `>=0.51.1` without the retired cap, and the unit tests cover all three.
+
 ## v0.1.16 - 2026-09-16
 
 ### Added
