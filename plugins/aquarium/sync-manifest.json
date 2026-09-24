@@ -50,7 +50,7 @@
   },
   "files": {
     ".claude-plugin/plugin.json": "a2bee8030096df6c7f9b55e0095c760d4f0e0a14f520fa2dca1822bab9bd6033",
-    "agents/independent-reviewer.md": "03d8561cd2e6788aac039d888e358c84e3fb91467193c0085b1f9cc14a5c50c9",
+    "agents/independent-reviewer.md": "1aecad82c4e12f5ff2db9b060209c59691c53336caeac2a3813cbfee90a44f48",
     "assets/podway/procedures/aquarium-design-v2.yaml": "3ec77c9593427753d51b21a12c2c067554aff751f4dbc2632dada0762853dc58",
     "assets/podway/procedures/aquarium-goal-v2.yaml": "a022cef14eb4f9112336c6dc20d35ebeb0abf7f08d586fc148353cb75a0d5986",
     "assets/podway/procedures/aquarium-task-v2.yaml": "6a76bbc00cc8fca87a26acbfe00688c0302addef06a8494f875b2e6bd6e032d9",

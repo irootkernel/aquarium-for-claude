@@ -617,6 +617,12 @@ Pathname.glob(PLUGIN.join("agents/*.md")).sort.each do |path|
   assert(agent.fetch("name") == path.basename(".md").to_s, "agent name must match its filename: #{relative}")
   assert(!agent.fetch("description").to_s.strip.empty?, "agent lacks a description: #{relative}")
   assert(AGENT_MODELS.include?(agent.fetch("model")), "agent model must be one of #{AGENT_MODELS.join(', ')}: #{relative}")
+  # Claude Code ignores these keys on plugin subagents — it only logs a warning,
+  # and `claude plugin validate --strict` stays silent — so a declared key would
+  # claim a restriction the agent does not have.
+  %w[permissionMode hooks mcpServers].each do |key|
+    assert(!agent.key?(key), "plugin agents cannot set #{key}; Claude Code ignores it: #{relative}")
+  end
   tools = agent.fetch("tools").to_s.split(",").map(&:strip)
   assert(!tools.empty? && (tools & EDITING_TOOLS).empty?, "reviewer agent must carry a tool allowlist without editing tools: #{relative}")
 end

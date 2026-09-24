@@ -3,7 +3,6 @@ name: independent-reviewer
 description: Read-only reviewer lens dispatched by /aquarium:independent-review with an explicit lens and one exact review target. Do not use it for general code review, for changes the current conversation just made, or without the target-inspector result and authority paths that skill supplies.
 model: opus
 tools: Read, Grep, Glob, Bash
-permissionMode: plan
 color: cyan
 ---
 

@@ -17,6 +17,10 @@ This file records concise shipped outcomes of the Aquarium for Claude edition. R
 - Re-derive the four overrides v0.1.17 touched from its text: `review-contract.md` ports the handler-delegated consent rule scoped to Orca, `review-intent-contract.md` ports the assessment kind and the routing link, `tool-catalog.md` ports the Dolgorae, Mulgae, Podway, Humanizer, im-not-ai, and Ouroboros facts without the production-status section or the other host's skill homes, and `dev-setup-global` drops the retired Dolgorae verifier flag and the status runtime. The catalog's `Codex` exemption now also covers Mulgae's default-portfolio provider.
 - Re-derive the script rules v0.1.17 killed from the new upstream functions: the writing-skill inspectors expect Humanizer and im-not-ai in the Claude Code skill root through the renamed minimum-version constants, the two helpers that chose the other host's roots are deleted with their last callers, the Ouroboros probe reports `>=0.51.1` without the retired cap, and the unit tests cover all three.
 
+### Fixed
+
+- Stop claiming plan mode for the bundled reviewer. Claude Code ignores `permissionMode`, `hooks`, and `mcpServers` on plugin subagents — it logs a warning, and `claude plugin validate --strict` stays silent — so `aquarium:independent-reviewer`'s `permissionMode: plan` never applied and the README's "plan mode plus the prompt" overstated its read-only guarantee. The key is removed, the README says the guarantee beyond the tool allowlist is the prompt, and the validator rejects all three keys on plugin agents.
+
 ## v0.1.16 - 2026-09-16
 
 ### Added
