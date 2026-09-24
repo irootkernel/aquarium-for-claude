@@ -20,12 +20,12 @@ The workflow plan selects exactly one route and, where required, its reviewer:
 
 The selected route remains effective at later checkpoints until the user
 explicitly authorizes a bounded route change. Do not create a repository or
-user-global preference. On this host the `native-codex` route ID and the Podway Procedure labels and criteria that name this route keep upstream's canonical bytes and mean Claude Code's native subagent review. `/aquarium:independent-review` stays live as a standalone report-only entry point and is not a selectable route.
+user-global preference. On this host the `native-codex` route ID and the Podway Procedure labels and criteria that name this route keep upstream's canonical bytes and mean Claude Code's native subagent review, which dispatches the bundled `aquarium:independent-reviewer` agent once over the complete Review Brief. `/aquarium:independent-review` stays live as a standalone report-only entry point and is not a selectable route.
 
 Check only the selected route's prerequisites. A missing Mulgae installation,
 project MCP, provider, or paired skill does not block Orca, native Claude Code, or a
 waiver. Orca requires its requested reviewer and supported target. Native Claude Code
-requires fresh host delegation. A waiver requires no backend readiness.
+requires the bundled `aquarium:independent-reviewer` agent. A waiver requires no backend readiness.
 
 ## Preserve Route-Specific Targets and Guarantees
 
@@ -44,7 +44,7 @@ vocabulary and report the exact included and excluded state.
   absence of delegated review.
 
 Never describe Orca, native Claude Code, or a waiver as a Mulgae capture, publication,
-CI result, findings query, or recovery guarantee. Do not describe native Claude Code as Dolgorae, Orca, or Mulgae, or report its checkpoint as a standalone Independent Review run.
+CI result, findings query, or recovery guarantee. Do not describe native Claude Code as Dolgorae, Orca, or Mulgae, or report its checkpoint as a standalone Independent Review run, although both dispatch the bundled reviewer agent.
 
 ## Record Route-Neutral Evidence
 

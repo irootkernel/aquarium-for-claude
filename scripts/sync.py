@@ -332,11 +332,38 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # runs before the generic rename at the end of this block.
     (
         "Independent Review remains disabled and is not a\nselectable route.",
-        "On this host the `native-codex` route ID and the Podway Procedure labels and criteria that name this route keep upstream's canonical bytes and mean Claude Code's native subagent review. `/aquarium:independent-review` stays live as a standalone report-only entry point and is not a selectable route.",
+        "On this host the `native-codex` route ID and the Podway Procedure labels and criteria that name this route keep upstream's canonical bytes and mean Claude Code's native subagent review, which dispatches the bundled `aquarium:independent-reviewer` agent once over the complete Review Brief. `/aquarium:independent-review` stays live as a standalone report-only entry point and is not a selectable route.",
     ),
     (
         "Do not describe native Codex\nas Independent Review, Dolgorae, Orca, or Mulgae.",
-        "Do not describe native Claude Code as Dolgorae, Orca, or Mulgae, or report its checkpoint as a standalone Independent Review run.",
+        "Do not describe native Claude Code as Dolgorae, Orca, or Mulgae, or report its checkpoint as a standalone Independent Review run, although both dispatch the bundled reviewer agent.",
+    ),
+    # The `native-codex` route runs through the bundled `aquarium:independent-reviewer`:
+    # its tool allowlist removes the editing, writing, and agent-dispatch
+    # tools the route forbids, its prompt forbids writing through Bash, and it
+    # reviews the whole Review Brief in one pass. Three of these anchors
+    # contain the upstream phrase, so the block precedes the generic rename.
+    (
+        "For `native-codex`, create one fresh host subagent with the exact bounded target, complete Review Brief, and static report-only instructions. Require no edits, tests, nested agents, or lifecycle mutation. Preserve the host delegation identity and reviewer provenance without calling it independent review.",
+        "For `native-codex`, dispatch one fresh `aquarium:independent-reviewer` subagent through this host's own subagent mechanism with the exact bounded target, the complete Review Brief, and static report-only instructions, and have it review the whole brief in one pass rather than through a single lens. Leave it on its Opus default unless the user explicitly asked for Fable. Its tools already exclude the editing, writing, and agent-dispatch tools; the specification must still forbid edits through Bash, tests, and lifecycle mutation. If that agent is unavailable, record a preflight failure for this route and stop for user direction rather than substituting another subagent type. Preserve the dispatch identity and reviewer provenance without reporting it as a standalone Independent Review run.",
+    ),
+    (
+        "native Codex through one fresh report-only host subagent",
+        "native Claude Code through one fresh report-only `aquarium:independent-reviewer` subagent reviewing the whole brief in one pass",
+    ),
+    (
+        "native Codex through one fresh static report-only host subagent",
+        "native Claude Code through one fresh static report-only `aquarium:independent-reviewer` subagent reviewing the whole brief in one pass",
+    ),
+    (
+        "For `native-codex`, require fresh host delegation.",
+        "For `native-codex`, require that this host's subagent mechanism offers the bundled `aquarium:independent-reviewer` agent.",
+    ),
+    (
+        "Native Codex\n"
+        "requires fresh host delegation.",
+        "Native Claude Code\n"
+        "requires the bundled `aquarium:independent-reviewer` agent.",
     ),
     # The leading space keeps a word that merely ends in "native", such as
     # "alternative", from being renamed; a capital N already starts a word.
