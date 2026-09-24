@@ -17,7 +17,7 @@ Use Podway by default. Exclude it only when the current user explicitly opts thi
 
 Otherwise read the Podway contract and use one `aquarium-validation-v2` session for this exact cold-validation lifecycle. Podway records each bounded pass and user disposition; the roadmap and current implementation remain the semantic authority. A session created from an earlier managed Procedure version keeps its immutable snapshot and is not migrated in place.
 
-Create a Claude Code todo list only on explicit user request under its tool contract, whether Podway is active or opted out. Continue an existing authorized Claude Code todo list through audit, remediation, and confirmation within its own scope. Remediation groups organize the work; they do not create separate Claude Code todo lists or Podway sessions.
+Work under a Claude Code session goal only when the user has set one, whether Podway is active or opted out. Continue an existing authorized Claude Code session goal through audit, remediation, and confirmation within its own scope. Remediation groups organize the work; they do not create separate Claude Code session goals or Podway sessions.
 
 ## Establish the Validation Contract
 
@@ -53,7 +53,7 @@ For each completed delegated review or waiver assessment, record the next positi
 
 ## Audit the Epic Directly
 
-Run the audit without source mutation. An existing authorized Claude Code todo list may remain active during the audit:
+Run the audit without source mutation. An existing authorized Claude Code session goal may remain active during the audit:
 
 1. Build a requirement-to-owner-to-production-to-test-to-document matrix across every member task. Trace runtime wiring, consumers, persistence, concurrency, migrations, generated artifacts, failure and recovery behavior, operational guidance, external dependencies, roadmap consistency, repository-defined dossier disposition when applicable, and coverage by the completed epic's canonical sources.
 2. Inspect current code and evidence directly. Run only repository-authorized checks needed for the epic claim. Keep current agent-run, explicit user-run, unavailable, forbidden, stale, external, live, commit, and upstream publication evidence distinct; narrow green checks do not prove uncovered requirements.
@@ -86,11 +86,11 @@ For each remediation group:
 
 Confirm the group's diff, including any necessary lifecycle or current-semantics documentation, equals the verified correction for the recorded source findings. Hand that exact scope, its evidence, owning task or epic ID, release-note target and decision, `review-route`, `review-operation`, `review-evidence-reference`, `backend-check-result`, `assessment-provenance`, the consumed `assessment-ordinal` and `assessment-kind` or their explicit inapplicability, the waiver summary or explicit inapplicability, the complete Low-settlement composition defined by the shared finding-disposition contract or its explicit inapplicability, zero or more approved promoted manifest path and digest pairs or their explicit absence, and approved one-commit authority to `/aquarium:task-commit`.
 
-Verify the returned commit snapshot, residue, and hook evidence before completing the remediation group. Complete an authorized Claude Code todo list only when its full objective is achieved; a remediation commit alone does not establish that. The later whole-epic confirmation review, not the source review, owns coverage of those committed bytes.
+Verify the returned commit snapshot, residue, and hook evidence before completing the remediation group. Report an authorized Claude Code session goal met only when its full objective is achieved; a remediation commit alone does not establish that. The later whole-epic confirmation review, not the source review, owns coverage of those committed bytes.
 
 ## Converge and stop on repeated findings
 
-After first-round blocking remediation completes, discard stale matrix, checks, and result evidence while preserving the exact trigger set and earlier route lineage. Continue any authorized Claude Code todo list while refreshing the direct audit and running one ordinal-two `work-unit` assessment through the current route from the latest committed snapshot; an explicit safe route change remains available. A Low-only initial result does not require this cycle.
+After first-round blocking remediation completes, discard stale matrix, checks, and result evidence while preserving the exact trigger set and earlier route lineage. Continue any authorized Claude Code session goal while refreshing the direct audit and running one ordinal-two `work-unit` assessment through the current route from the latest committed snapshot; an explicit safe route change remains available. A Low-only initial result does not require this cycle.
 
 When ordinal two establishes a Medium-or-higher finding or affected completion gap, remediate that verified set, rerun affected checks, refresh the complete Epic audit, and run one ordinal-three `work-unit` assessment from the latest committed snapshot. Stop early when ordinal two or three is clean or reaches completed Low-only settlement.
 

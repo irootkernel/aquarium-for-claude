@@ -17,7 +17,7 @@ Treat an unqualified request to "plan only" as `plan-only`. Select `plan-handoff
 
 ## Prepare the Handoff After Approval
 
-Do not create the handoff file, a Claude Code todo list, or a Podway session before the user explicitly approves the decision-complete plan and the disclosed handoff operations. If the host remains in Plan mode, return an exact continuation request for the same handler, repository, roadmap identity, and `mode=plan-handoff`; perform no handoff mutation in that turn.
+Do not create the handoff file or a Podway session, or propose a Claude Code session goal, before the user explicitly approves the decision-complete plan and the disclosed handoff operations. If the host remains in Plan mode, return an exact continuation request for the same handler, repository, roadmap identity, and `mode=plan-handoff`; perform no handoff mutation in that turn.
 
 After approval in an execution-capable turn:
 

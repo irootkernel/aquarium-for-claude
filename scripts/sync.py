@@ -310,6 +310,18 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "\n",
         "",
     ),
+    # Upstream's host goal is a Codex goal the model creates, completes, and
+    # marks blocked through a tool. Claude Code's counterpart is the session
+    # `/goal`: the user sets or clears it, and an evaluator judges it from the
+    # conversation after every turn and ends it once it holds or is impossible, while the todo tools this edition
+    # used to name are off by default on Fable 5.1 and Opus 5.5. Sentences
+    # whose verbs would create, complete, or block the goal are rewritten to
+    # work under it and report; this one carries a `$aquarium:` sigil, so it
+    # runs before that rule, and the rest precede the generic mapping below.
+    (
+        "When a Codex goal is authorized, keep it active through every phase. Mark it complete only after `$aquarium:task-close` succeeds and no required task work or authorized lifecycle action remains. Mark the goal blocked only when the host's goal tool defines a blocked state and its own repeated-blocker rule is met by the same unresolved external blocker persisting across consecutive goal turns with no authorized action remaining; otherwise keep it active and report the exact gap.",
+        "When the user has set a Claude Code session goal, keep working toward it through every phase. Report it met only after `/aquarium:task-close` succeeds and no required task work or authorized lifecycle action remains. Report it unreachable only when the same unresolved external blocker persists across consecutive turns with no authorized action remaining, because the evaluator may then end it as impossible; otherwise keep working and report the exact gap.",
+    ),
     ("$aquarium:", "/aquarium:"),
     # The shared disposition contract credits re-review after remediation to
     # every route — v0.1.17 added the native subagent route and the waiver —
@@ -405,9 +417,48 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # anchor still carries the unmapped phrase.
     (
         "does not independently prove the Codex objective complete. Verify the actual requirements and external results, and continue any remaining authorized work. A Podway blocker does not automatically block a Codex goal: follow the current Codex tool contract, including any recurrence threshold, and continue useful independent work.",
-        "does not independently prove the host objective complete. Verify the actual requirements and external results, and continue any remaining authorized work. A Podway blocker does not automatically block a Claude Code todo list: follow that list's current tool contract, including any recurrence threshold, and continue useful independent work.",
+        "does not independently prove the host objective complete. Verify the actual requirements and external results, and continue any remaining authorized work. A Podway blocker does not by itself make a Claude Code session goal unreachable: report it as the exact Podway blocker rather than as goal impossibility, and continue useful independent work.",
     ),
-    ("Codex goal", "Claude Code todo list"),
+    # The one defining sentence lives in the Podway contract, which every
+    # goal-coordinating skill reads; `/goal` is named only where the user is
+    # handed a condition to type.
+    (
+        "Codex goals and Podway goals have separate creation rules and lifecycles. Create a Codex goal only when explicitly requested under its current tool contract; a Podway goal does not authorize one.",
+        "Claude Code session goals and Podway goals have separate creation rules and lifecycles. A Claude Code session goal is the completion condition the user sets with `/goal <condition>` or clears with `/goal clear`, distinct from a Podway session's goal; after each turn an evaluator judges it from the conversation alone and ends it once it holds or is judged impossible, so surface completion evidence or the exact blocker there instead of trying to mark it, and never propose one merely because a Podway goal exists.",
+    ),
+    (
+        "Create a separate Codex goal only on explicit user request under its tool contract",
+        "Work under a separate Claude Code session goal only when the user sets one",
+    ),
+    (
+        "Create a Codex goal only on explicit user request under its tool contract",
+        "Work under a Claude Code session goal only when the user has set one",
+    ),
+    (
+        "create a Codex goal only on explicit request",
+        "work under a Claude Code session goal only when the user sets one",
+    ),
+    (
+        "Create a Codex goal only after plan approval and an explicit user request under its tool contract. When authorized, inspect the current goal, continue it when it represents the same task, create one containing the task ID and evidence boundary when none exists, and stop rather than replace a different unfinished goal. Otherwise proceed without a Codex goal. Omit a token budget unless the user explicitly supplied one.",
+        "Work under a Claude Code session goal only after plan approval and only when the user sets one. When the user asks for one, give them the exact `/goal` condition naming the task ID and evidence boundary, and tell them that setting it replaces any different goal already active, because a session holds one goal at a time. Otherwise proceed without proposing a Claude Code session goal.",
+    ),
+    (
+        "When a Codex goal is explicitly authorized, create one or continue the matching existing goal under its tool contract, and omit a token budget unless the user supplied one.",
+        "When the user explicitly asks for a Claude Code session goal, give them the exact `/goal` condition for this task, or continue the matching goal already set.",
+    ),
+    (
+        "Complete an authorized Codex goal only",
+        "Report an authorized Claude Code session goal met only",
+    ),
+    (
+        "complete the Codex goal as achieved",
+        "report the Claude Code session goal met",
+    ),
+    (
+        "Do not create the handoff file, a Codex goal, or a Podway session",
+        "Do not create the handoff file or a Podway session, or propose a Claude Code session goal,",
+    ),
+    ("Codex goal", "Claude Code session goal"),
     ("fresh Codex audit", "fresh from-scratch audit"),
     # Ouroboros registers its skills with the host agent, so the component whose
     # health `dev-setup` establishes is the Claude Code one here. The bundle

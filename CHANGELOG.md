@@ -21,6 +21,7 @@ This file records concise shipped outcomes of the Aquarium for Claude edition. R
 ### Fixed
 
 - Stop claiming plan mode for the bundled reviewer. Claude Code ignores `permissionMode`, `hooks`, and `mcpServers` on plugin subagents — it logs a warning, and `claude plugin validate --strict` stays silent — so `aquarium:independent-reviewer`'s `permissionMode: plan` never applied and the README's "plan mode plus the prompt" overstated its read-only guarantee. The key is removed, the README says the guarantee beyond the tool allowlist is the prompt, and the validator rejects all three keys on plugin agents.
+- Map upstream's host goal to Claude Code's session goal instead of a todo list. The todo tools are off by default on Fable 5.1 and Opus 5.5, so 21 generated lines — the `upgrade` skill's among them — pointed those models at a tool they do not have. The goal is now the `/goal` completion condition the user sets or clears and an evaluator ends once it holds or is impossible; the Podway contract defines it once, sentences that had the model create, complete, or block the goal now have it work under the goal and report met or unreachable, the token-budget instruction `/goal` has no counterpart for is dropped, and `upgrade` reports its phase and gate progress in the conversation instead of a todo list.
 
 ## v0.1.16 - 2026-09-16
 
