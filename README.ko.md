@@ -1,16 +1,10 @@
 # Aquarium for Claude
 
-Aquarium 개발 스킬을 Claude Code 플러그인 마켓플레이스로 패키징한 저장소입니다. 이 저장소는 **생성된 아티팩트**입니다. 진실의 원천은 [irootkernel/aquarium](https://github.com/irootkernel/aquarium)의 Codex 플러그인이며, 여기에는 서브모듈로 고정되어 `scripts/sync.py`가 변환합니다.
-
 [English](README.md) · 한국어
 
-제작 [Root Kernel](https://home.rootkernel.xyz) · 지원: [cs@rootkernel.xyz](mailto:cs@rootkernel.xyz)
+> 바이브 코딩이 아닌, AI Fleets로 하는 소프트웨어 엔지니어링.
 
-## Aquarium Editions
-
-- [Aquarium](https://github.com/irootkernel/aquarium) — Codex
-- [Aquarium for Grok](https://github.com/irootkernel/aquarium-for-grok)
-- [Aquarium for GLM](https://github.com/irootkernel/aquarium-for-glm)
+Aquarium for Claude는 AI 에이전트로 신뢰할 수 있는 소프트웨어를 만들기 위한 Claude Code 플러그인입니다. 모든 작업은 추적되는 상태를 가지고, 완료에는 검증된 증거가 필요하며, 중대한 작업은 사용자의 승인을 기다립니다.
 
 ## 설치
 
@@ -35,6 +29,14 @@ claude plugin install aquarium@aquarium-for-claude
 ```
 
 Podway 통합을 쓰던 저장소는 이전하기 전에 활성 세션을 끝내거나 명시적으로 폐기해야 하며, 그 뒤 별도로 승인된 `/aquarium:dev-setup` 실행으로 관리 대상 `root-kernel-{task,goal,validation}-v2.yaml` 절차를 교체해야 합니다.
+
+제작 [Root Kernel](https://home.rootkernel.xyz) · 지원: [cs@rootkernel.xyz](mailto:cs@rootkernel.xyz)
+
+## Aquarium Editions
+
+- [Aquarium](https://github.com/irootkernel/aquarium) — Codex
+- [Aquarium for Grok](https://github.com/irootkernel/aquarium-for-grok)
+- [Aquarium for GLM](https://github.com/irootkernel/aquarium-for-glm)
 
 ## 스킬
 
@@ -87,6 +89,8 @@ Podway 통합을 쓰던 저장소는 이전하기 전에 활성 세션을 끝내
 이것이 이 플러그인이 업스트림 저장소의 두 번째 매니페스트가 아니라 별도 아티팩트인 이유이기도 합니다. Codex의 플러그인 검증기는 `disable-model-invocation`을 그대로 거부하지만, Claude Code는 같은 보장을 위해 그것이 필요합니다.
 
 ## 생성 방식
+
+이 저장소는 Aquarium 개발 스킬을 Claude Code 플러그인 마켓플레이스로 패키징한 **생성된 아티팩트**입니다. 진실의 원천은 [irootkernel/aquarium](https://github.com/irootkernel/aquarium)의 Codex 플러그인이며, 여기에는 서브모듈로 고정되어 `scripts/sync.py`가 변환합니다.
 
 ```
 upstream/                        업스트림 커밋 하나에 고정된 git 서브모듈

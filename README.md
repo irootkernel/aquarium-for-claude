@@ -1,16 +1,10 @@
 # Aquarium for Claude
 
-Aquarium development skills packaged as a Claude Code plugin marketplace. This repository is a **generated artifact**: the source of truth is the Codex plugin at [irootkernel/aquarium](https://github.com/irootkernel/aquarium), pinned here as a submodule and transformed by `scripts/sync.py`.
-
 English · [한국어](README.ko.md)
 
-By [Root Kernel](https://home.rootkernel.xyz) · Support: [cs@rootkernel.xyz](mailto:cs@rootkernel.xyz)
+> Software engineering with AI Fleets, not vibe coding.
 
-## Aquarium Editions
-
-- [Aquarium](https://github.com/irootkernel/aquarium) — Codex
-- [Aquarium for Grok](https://github.com/irootkernel/aquarium-for-grok)
-- [Aquarium for GLM](https://github.com/irootkernel/aquarium-for-glm)
+Aquarium for Claude is a Claude Code plugin for engineering reliable software with AI agents. Every task has a tracked state, completion needs verified evidence, and consequential actions wait for your approval.
 
 ## Install
 
@@ -35,6 +29,14 @@ claude plugin install aquarium@aquarium-for-claude
 ```
 
 Repositories that used the Podway integration must finish or explicitly dispose of any active session before migrating, then replace the managed `root-kernel-{task,goal,validation}-v2.yaml` procedures through a separately approved `/aquarium:dev-setup` run.
+
+By [Root Kernel](https://home.rootkernel.xyz) · Support: [cs@rootkernel.xyz](mailto:cs@rootkernel.xyz)
+
+## Aquarium Editions
+
+- [Aquarium](https://github.com/irootkernel/aquarium) — Codex
+- [Aquarium for Grok](https://github.com/irootkernel/aquarium-for-grok)
+- [Aquarium for GLM](https://github.com/irootkernel/aquarium-for-glm)
 
 ## Skills
 
@@ -87,6 +89,8 @@ The skills that take arguments also carry an `argument-hint`, which Claude Code 
 This is also why the plugin is a separate artifact rather than a second manifest in the upstream repository: Codex's plugin validator rejects `disable-model-invocation` outright, while Claude Code needs it for the same guarantee.
 
 ## How generation works
+
+This repository is a **generated artifact** that packages the Aquarium development skills as a Claude Code plugin marketplace: the source of truth is the Codex plugin at [irootkernel/aquarium](https://github.com/irootkernel/aquarium), pinned here as a submodule and transformed by `scripts/sync.py`.
 
 ```
 upstream/                        git submodule, pinned to one upstream commit
