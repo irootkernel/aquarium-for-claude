@@ -54,8 +54,9 @@ ADDED_PATHS: tuple[str, ...] = (
     "agents/independent-reviewer.md",
     # The edition-owned upgrade lifecycle. Additions land after
     # `transform_skills`, so this skill never sees the sidecar-derived
-    # decoration: its frontmatter — the gating flag included — is authored
-    # final, and `apply_additions` refuses a skill addition that omits it.
+    # decoration or the delegation note: its frontmatter — the gating flag
+    # included — is authored final, and `apply_additions` refuses a skill
+    # addition that omits it.
     "skills/upgrade/SKILL.md",
     "skills/upgrade/references/rederivation.md",
     # The repository-state inspector this edition's independent review runs for
@@ -89,6 +90,38 @@ ARGUMENT_HINTS: dict[str, str] = {
     "mulgae-review": "<target> [task-or-epic-id]",
     "orca-review": "<target> [task-or-epic-id]",
 }
+
+# Upstream skills hand work to each other by name: `task-handler` loads its
+# phase skills, `release-handler` runs `release-qa`, and the workflows run a
+# selected review route. Codex treats such a mention as an explicit invocation,
+# but Claude Code's Skill tool refuses a `disable-model-invocation` skill unless
+# the user typed its name in the current turn — and always inside a subagent —
+# and its refusal forbids carrying out that workflow any other way. Every gated
+# upstream-derived skill therefore opens with this note, which routes a
+# delegation through the delegated skill's file. A gated skill runs only because
+# the user started it or a user-started skill handed it a step, so the gate
+# against Claude starting a skill on its own stays intact: a model-invocable
+# skill carries no note, and a hand-off from it into a gated skill keeps being
+# refused and goes back to the user. The note also tells a hand-back — a
+# continuation request the text returns to the user — apart from a delegation,
+# because the refusal used to be what sent those back. It names the host's
+# Skill tool, so a rename of that tool retires this wording.
+DELEGATION_NOTE: str = (
+    "> **Claude Code delegation:** when this skill, or a reference or Procedure node it "
+    "follows, hands a step to another Aquarium skill — however it phrases the hand-off, "
+    "and whether it writes `/aquarium:<name>` or names the skill bare — read that "
+    "skill's `SKILL.md` in full from this plugin (`../<name>/SKILL.md` from this "
+    "skill's directory) and follow it as the delegated step instead of calling the "
+    "Skill tool. Claude Code reserves most Aquarium skills for the user to type: it "
+    "refuses the Skill tool for them and, once it has refused, forbids carrying out "
+    "their workflow any other way. When you hand such a step to a subagent, put that "
+    "file's absolute path in its assignment and have it read the file, because a "
+    "subagent cannot load a gated skill through the Skill tool. Running another "
+    "skill's bundled script is not a hand-off. A continuation request, routed repair, "
+    "offer, or recommendation that the text has you return or report to the user is "
+    "not a delegation: name its slash command, do not run it yourself, and stop where "
+    "the text stops."
+)
 
 # Upstream files deliberately left out of the generated plugin. Each entry pairs
 # the path with the reason it does not belong in a Claude Code artifact. The
@@ -2345,6 +2378,28 @@ def decorate_frontmatter(
     return text.replace(match.group(0), "---\n" + "\n".join(lines) + "\n---\n", 1)
 
 
+def insert_delegation_note(text: str, skill_name: str) -> str:
+    """Open the skill body with `DELEGATION_NOTE`, directly under its title.
+
+    The note has to precede every instruction the model could act on, because a
+    refused Skill tool call cannot be undone by reading on. A body that does not
+    open with its title stops the run rather than receiving the note somewhere
+    it might be read too late, so the frontmatter is matched on its own and the
+    title must follow it directly; one pattern spanning both could run past the
+    frontmatter to a later rule and title.
+    """
+    frontmatter = re.match(r"\A---\n.*?\n---\n", text, re.DOTALL)
+    title = frontmatter and re.compile(r"\n# [^\n]+\n\n").match(text, frontmatter.end())
+    if not title:
+        raise SyncError(
+            f"skill `{skill_name}` body does not open with its title; "
+            "the delegation note has no safe place"
+        )
+    if DELEGATION_NOTE in text:
+        raise SyncError(f"skill `{skill_name}` already carries the delegation note")
+    return text[: title.end()] + DELEGATION_NOTE + "\n\n" + text[title.end() :]
+
+
 def copy_tree(destination: Path) -> None:
     for name in COPIED_DIRECTORIES:
         source = UPSTREAM_PLUGIN / name
@@ -2383,15 +2438,15 @@ def transform_skills(destination: Path) -> None:
         skill_md = skill / "SKILL.md"
         if not skill_md.is_file():
             raise SyncError(f"skill `{name}` has no SKILL.md")
-        skill_md.write_text(
-            decorate_frontmatter(
-                skill_md.read_text(encoding="utf-8"),
-                name,
-                allow_implicit,
-                ARGUMENT_HINTS.get(name),
-            ),
-            encoding="utf-8",
+        text = decorate_frontmatter(
+            skill_md.read_text(encoding="utf-8"),
+            name,
+            allow_implicit,
+            ARGUMENT_HINTS.get(name),
         )
+        if not allow_implicit:
+            text = insert_delegation_note(text, name)
+        skill_md.write_text(text, encoding="utf-8")
         # The Codex sidecar has no meaning for Claude Code and its `$` prompts
         # would contradict the generated text, so it is dropped.
         shutil.rmtree(skill / "agents", ignore_errors=True)

@@ -4,6 +4,10 @@ This file records concise shipped outcomes of the Aquarium for Claude edition. R
 
 ## v0.1.18 - Unreleased
 
+### Fixed
+
+- Stop workflows from halting when they hand a step to a gated skill. Upstream skills delegate by name — `task-handler` loads its seven phase skills, `release-handler` runs `release-qa`, and `dev-setup-bundle` prepares global components through `dev-setup-global` — which Codex treats as an explicit invocation, but Claude Code's Skill tool refuses a `disable-model-invocation` skill unless the user typed its name in the current turn, always refuses it inside a subagent, and forbids carrying out the refused workflow by other means, so the model stopped at every such hand-off. Generation now opens every gated upstream-derived skill, overrides included, with a note directly under its title that has Claude read the delegated skill's `SKILL.md` and follow it instead of calling the Skill tool, give that file's absolute path to any subagent it hands the step to, and keep returning a continuation request the text hands back to the user instead of running it; model-invocable skills carry no note, so a hand-off from a skill Claude started on its own still goes back to the user, a skill body that does not open with its title stops generation, and `tests/validate.rb` asserts the note in every gated upstream-derived skill, exactly once under its title, and its absence everywhere else.
+
 ## v0.1.17 - 2026-09-24
 
 ### Added

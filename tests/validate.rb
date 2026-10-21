@@ -5,9 +5,10 @@
 #
 # Upstream owns the prose contract and already validates it in its own CI, so
 # this file deliberately does not re-assert skill wording. It checks only what
-# the transformation is responsible for: invocation gating, host-neutral text,
-# manifest agreement, deliberate exclusions, runnable generated scripts, and
-# freshness against the pinned upstream.
+# the transformation is responsible for: invocation gating and the delegation
+# note it implies, host-neutral text, manifest agreement, deliberate
+# exclusions, runnable generated scripts, and freshness against the pinned
+# upstream.
 
 require "json"
 require "pathname"
@@ -214,13 +215,15 @@ EXTRACT_TABLES = <<~PYTHON
   import ast, json, pathlib
 
   tree = ast.parse(pathlib.Path("scripts/sync.py").read_text())
-  wanted = {"FORBIDDEN", "SIGIL_LITERALS", "EXCLUDED_PLUGIN_ROOT", "EXCLUDED_SKILLS", "CANONICAL_PHRASES"}
+  wanted = {"FORBIDDEN", "SIGIL_LITERALS", "EXCLUDED_PLUGIN_ROOT", "EXCLUDED_SKILLS", "CANONICAL_PHRASES", "DELEGATION_NOTE"}
   whole_rows = {"CANONICAL_PHRASES"}
   found = {}
   for node in tree.body:
       target = getattr(node, "target", None)
       name = getattr(target, "id", None)
-      if name in wanted:
+      if name in wanted and isinstance(node.value, ast.Constant):
+          found[name] = node.value.value
+      elif name in wanted:
           found[name] = [
               [part.value for part in element.elts] if name in whole_rows
               else element.elts[0].value if isinstance(element, ast.Tuple) else element.value
@@ -280,6 +283,36 @@ assert(
   skill_paths.any? { |path| path.read.include?("/aquarium:") },
   "generated skills never reference the Claude invocation form"
 )
+
+# Upstream skills delegate to each other by name, and Claude Code's Skill tool
+# refuses a gated skill unless the user typed it, so every gated
+# upstream-derived skill must open with the note that routes a delegation
+# through the delegated skill's file, before any instruction the model could
+# act on. A model-invocable skill must not carry it: Claude can start one on its
+# own, and a hand-off from it into a gated skill has to keep going back to the
+# user. Additions are authored final and delegate to nothing.
+DELEGATION_NOTE = sync_tables.fetch("DELEGATION_NOTE")
+assert(DELEGATION_NOTE.is_a?(String) && !DELEGATION_NOTE.include?("\n"), "the delegation note must be one paragraph on one line")
+assert(DELEGATION_NOTE.scan(SIGIL).empty?, "the delegation note must not spell a skill sigil")
+FORBIDDEN_TEXT.each do |needle|
+  assert(!DELEGATION_NOTE.include?(needle), "the delegation note contains `#{needle}`")
+end
+addition_skill_names = sync_manifest.fetch("additions").map { |p| p[%r{\Askills/([^/]+)/SKILL\.md\z}, 1] }.compact
+skill_paths.each do |path|
+  name = path.dirname.basename.to_s
+  text = path.read
+  frontmatter = text.match(/\A---\n(.*?)\n---\n/m)
+  gated = YAML.safe_load(frontmatter[1], aliases: false).fetch("disable-model-invocation", false) == true
+  if addition_skill_names.include?(name) || !gated
+    assert(!text.include?(DELEGATION_NOTE), "only a gated upstream-derived skill may carry the delegation note: #{name}")
+    next
+  end
+  assert(
+    text[frontmatter.end(0)..].match?(/\A\n# [^\n]+\n\n#{Regexp.escape(DELEGATION_NOTE)}\n\n/),
+    "gated skill must open with the delegation note directly under its title: #{name}"
+  )
+  assert(text.scan(DELEGATION_NOTE).length == 1, "gated skill must carry the delegation note exactly once: #{name}")
+end
 
 inspection = PLUGIN.join("skills/dev-setup/scripts/inspect_tools.py")
 if inspection.file?
