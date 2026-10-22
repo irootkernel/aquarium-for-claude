@@ -9,19 +9,39 @@ disable-model-invocation: true
 
 > **Claude Code delegation:** when this skill, or a reference or Procedure node it follows, hands a step to another Aquarium skill — however it phrases the hand-off, and whether it writes `/aquarium:<name>` or names the skill bare — read that skill's `SKILL.md` in full from this plugin (`../<name>/SKILL.md` from this skill's directory) and follow it as the delegated step instead of calling the Skill tool. Claude Code reserves most Aquarium skills for the user to type: it refuses the Skill tool for them and, once it has refused, forbids carrying out their workflow any other way. When you hand such a step to a subagent, put that file's absolute path in its assignment and have it read the file, because a subagent cannot load a gated skill through the Skill tool. Running another skill's bundled script is not a hand-off. A continuation request, routed repair, offer, or recommendation that the text has you return or report to the user is not a delegation: name its slash command, do not run it yourself, and stop where the text stops.
 
+Under an ordinary `task-handler`, follow [Task orchestration](../../references/task-orchestration.md). Return the node-specific `aquarium.executor-handoff/v3` with exact target, original requirements, actual results, available public handles, performed and omitted checks, authority and gaps. The Coordinator owns Podway records and Decisions; the independent Evaluator assesses coherent delivery phases. Admitted formal snapshots retain their original v1 contract. Direct invocation keeps this phase's existing authority.
+
+Read [commit-attribution.md](../../references/commit-attribution.md) for message formatting and change origins, within this skill's existing effect boundaries.
+
 Document only the refined task established by `/aquarium:task-handler`. Consume the selected current implementation identity, refinement result, verification result and observations, and verification decision; do not reconstruct them from stale narrative history. When invoked directly, require the repository, roadmap path, task ID, final behavior, and current task-owned diff.
 
 Read [documentation-governance.md](../../references/documentation-governance.md), [epic-execution-sot.md](../../references/epic-execution-sot.md), [evidence-residency.md](../../references/evidence-residency.md), and [release-notes.md](../../references/release-notes.md).
 
 ## Update Durable Documentation
 
-Resolve the task's parent epic, handler-resolved execution SOT and any linked active dossier, `docs/README.md`, and canonical role owners from the roadmap. Determine documentation impact from final behavior and the task-owned requirements.
+Resolve the task entry, its parent epic, handler-resolved execution SOT and any task- or epic-linked active dossier, `docs/README.md`, and canonical role owners from the roadmap. Determine documentation impact from final behavior and the task-owned requirements.
 
 Promote accepted behavior to specifications, current components and boundaries to architecture, accepted rationale to architecture decision records, code-changing or verification guidance to implementation tips, environment setup or deployment and recovery guidance to operations, and user-facing value or usage to the root README.
 
 Update only affected durable owners, generated-document sources, any active dossier, and roadmap entries.
 
-When a dossier exists, keep it current for remaining member tasks and consumer epics. Remove or revise only this task's consumed handoffs and stale assumptions; retain requirements and acceptance needed by any remaining consumer until its epic closeout.
+Apply [directory agent guidance](../../references/directory-agent-guidance.md)
+to the final affected paths. Recheck applicable root, ancestor and directory
+guides, the adoption declaration and original canonical sources. Update changed
+behavior at its canonical owner, then maintain affected guide links and local
+instructions, preserving useful content and local exceptions. Maintain existing
+applicable guides outside declared coverage as well. Within declared coverage,
+add a guide when authorized delivery creates a new independently meaningful
+feature boundary; outside it, report the gap without adopting or backfilling the
+area. An authorized feature move maintains its existing guide and affected
+references even across a coverage boundary, without expanding adoption.
+Unaffected guides need no edit, and missing guidance alone adds no legacy
+workflow prerequisite. Include all due document and guide changes in the
+candidate before the required final prose pass, validation and review.
+
+When a dossier exists, keep it current for remaining tasks and consumer epics. Remove or revise only this task's consumed handoffs and stale assumptions; retain requirements and acceptance needed by any remaining consumer until its applicable closeout.
+
+For a repository-defined standing group such as Aquarium's `EPIC-000`, settle the task-linked dossier at this Task's closeout under the shared execution-SOT contract; the parent group stays active. Prepare its canonical promotion, task-link replacement, TODO-index change, and any approved last-consumer deletion in the documentation candidate before review. Inventory every canonical consumer first. If deletion authority or a durable owner is missing, return the exact proposed disposition to the handler before mutation or review; do not defer this Task's settlement to an Epic closeout that the standing group does not have.
 
 Do not create a dossier during this leaf phase, mark checklist state as lifecycle state, or turn the execution SOT into implementation history. Stop the document phase when a durable task outcome has no canonical owner, when operational impact is left in implementation tips, or when a later task would read stale execution guidance.
 
@@ -61,8 +81,10 @@ Follow repository-owned documentation synchronization rules. Run required status
 
 In a Sanho-managed repository, reference `/use-sanho` and follow it only when this phase reaches an explicitly requested synchronization, lifecycle, or recovery action. Do not invoke Sanho for routine documentation editing or validation. If the skill is unavailable and repository guidance requires it, return an exact `/aquarium:dev-setup-global` continuation request; otherwise apply the repository's native Sanho rules and report that specialized guidance was unavailable.
 
-Run applicable documentation validation after the update. Verify the promoted canonical content, any active dossier consistency, and operations boundary separately from structural checks. Separate task-caused failures from pre-existing failures, but do not claim a complete documentation gate passed when it did not. Do not stage, invoke Mulgae, commit, or publish unless the orchestrator recorded separate authority for that exact action.
+Before the candidate enters review, apply the repository-required final prose pass with the installed language-appropriate humanizer skill. Preserve meaning, protected identifiers, code, commands, and exact approved text. Follow the repository's scratch-file and cleanup rules, and stop on an unavailable or invalid required pass. For a missing or incompatible skill, return an exact `/aquarium:dev-setup-global` continuation naming the repository, roadmap, Task, required skill, and observed gap. For invalid output, report the failed protection or validation check and return the candidate for correction under current authority. Do not postpone it until closeout; prose changes after review require the owning workflow's applicable rework or Low-settlement path.
+
+Run applicable documentation validation after the final prose update. Verify the promoted canonical content, any active dossier consistency, and operations boundary separately from structural checks. Separate task-caused failures from pre-existing failures, but do not claim a complete documentation gate passed when it did not. Do not stage, invoke Mulgae, commit, or publish unless the coordinator recorded separate authority for that exact action.
 
 ## Report Orchestration Evidence
 
-Return changed documentation paths, the canonical promotion decisions by role, dossier updates, the exact `entry`, `intentional no-note`, or `not-enrolled` release-note decision, roadmap state, synchronization and validation commands with exit codes, staged and unstaged documentation state, and remaining gaps to the orchestrator. This phase report is orchestration evidence, not a repository handoff. Do not copy it into durable documentation unless an item independently passes the downstream usefulness test.
+Return changed documentation paths, the canonical promotion decisions by role, dossier updates, the exact `entry`, `intentional no-note`, or `not-enrolled` release-note decision, roadmap state, synchronization and validation commands with exit codes, staged and unstaged documentation state, and remaining gaps to the coordinator. This phase report is orchestration evidence, not a repository handoff. Do not copy it into durable documentation unless an item independently passes the downstream usefulness test.

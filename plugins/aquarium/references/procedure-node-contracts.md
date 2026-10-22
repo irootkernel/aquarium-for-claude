@@ -13,6 +13,13 @@ unless the placement selects it.
 
 ## Task Procedure
 
+The bundled version-32 source follows [Task orchestration](task-orchestration.md).
+Ordinary native work assesses the plan, combined implementation/refinement/verification,
+documentation and completion after admitted review. The Coordinator records bookkeeping
+and Decisions. Original mandatory criteria, selected technical review, actual approval,
+correction ownership and commit authority remain independent; formal historical
+sessions retain their admitted rules.
+
 | Node family | Capability and required input | Boundary and result |
 | --- | --- | --- |
 | Plan and implementation entry | `task-handler` records the approved `task-plan` result and exact re-entry cause | No implementation before approval; return a bounded plan and authority basis |
@@ -20,11 +27,31 @@ unless the placement selects it.
 | Refine | `task-refine` consumes the current implementation result | Limit work to authorized cleanup and return the exact refined target |
 | Verify | `task-verify` consumes the current refined target and requirement matrix | No review or commit; return a typed current result and check identities |
 | Document | `task-document` consumes current implementation, refinement, verification, and verification decision evidence | Update canonical current behavior without copying runtime history |
-| Review and serial routing | `task-review` receives the named Task objective and criteria, exact candidate, relevant work or correction commits or staged capture, included and excluded paths, verification evidence, ordinal, assessment kind, mode, and source scope; the checkpoint carries the prior operation's route identity, and `task-handler` adjudicates route entry, confirmation, CI, completion, finding class with a finding-count consistency guard, rework authority, then implementation, verification, and documentation ownership | Ordinals one through three are `work-unit`; ordinal four and every explicitly authorized later checkpoint are `remediation-confirmation` and inspect only the frozen correction set and direct regression surface. `resume-current` reads the actual preceding unsettled operation and explicit direction, authorizes only Mulgae, Orca, or native Claude Code, and re-enters only the matching existing provider entry; it cannot switch providers, resume a waiver, bypass authorization, or act as fallback. `continue-current` reads an exact completed delegated or waived operation, requires the same effective route and `completed-checkpoint` readiness, preserves lineage and authority, and consumes the next ordinal. Switching or waiving after incomplete or failed work requires `safe-to-change` and preserves the pending ordinal; after a completed checkpoint it requires `completed-checkpoint`, preserves lineage, and consumes the next ordinal. Native counts remain descriptive; inconsistent totals return to review before finding classification; phase obligation totals alone select owners after authority is admitted; each correction after ordinal four consumes one fresh `fix-and-review` decision when it leaves the user-choice node, so repeated rework stops at a new unset choice; no phase can bypass an earlier failing gate |
-| Low settlement | `task-handler` consumes the frozen Low set and delegates only disposition-owned local work | Return exact source basis, dispositions, carried completion summary and zero gap counts, target delta, checks, pending count, blocker count, and coverage; no provider review solely for Low |
-| Assessment and closeout | `task-handler` consumes the carried completion summary and gap counts, their consistency when present, and any user direction before `task-close` and an independently authorized `task-commit` | A stop direction must assess the goal as not achieved; non-achieved work cannot close, and actual user approval plus exact final-target composition remain required |
+| Review and serial routing | `task-review` receives the named Task objective and criteria, exact candidate, relevant work or correction commits or native source identity, included and excluded paths, verification evidence, ordinal, assessment kind, mode, and source scope; the checkpoint carries the prior operation's route identity, and `task-handler` adjudicates route entry, confirmation and CI, accepts the retained Evaluator report, and uses its verdict for completion before finding class with a finding-count consistency guard, rework authority, then implementation, verification, and documentation ownership | Ordinals one through three are `work-unit`; ordinal four and every explicitly authorized later checkpoint are `remediation-confirmation` and inspect only the frozen correction set and direct regression surface. `new-review-current-route` admits one explicitly authorized fresh Mulgae root only after terminal settlement, preserving the pending ordinal and findings; `resume-current` reads the actual preceding unsettled operation and explicit direction, authorizes only Mulgae, Herdr, or Subagent Review, and re-enters only the matching existing provider entry; it cannot switch providers, resume a waiver, bypass authorization, or act as fallback. `continue-current` reads an exact completed delegated or waived operation, requires the same effective route and `completed-checkpoint` readiness, preserves lineage and authority, and consumes the next ordinal. Switching or waiving after incomplete or failed work requires `safe-to-change` and preserves the pending ordinal; after a completed checkpoint it requires `completed-checkpoint`, preserves lineage, and consumes the next ordinal. Native counts remain descriptive; inconsistent totals return to review before finding classification; phase obligation totals alone select owners after authority is admitted; each correction after ordinal four consumes one fresh `fix-and-review` decision when it leaves the user-choice node, so repeated rework stops at a new unset choice; no phase can bypass an earlier failing gate |
+| Local settlement | `task-handler` consumes the frozen eligible local correction and Low sets and delegates only disposition-owned local work | Return exact source basis, dispositions, current completion summary and zero gap counts, target delta, checks, pending count, blocker count, and coverage; no provider review solely for eligible local settlement |
+| Assessment and closeout | `task-handler` consumes the current completion summary and gap counts, their consistency when present, and any user direction before `task-close` and an independently authorized `task-commit` | A stop direction must assess the goal as not achieved; non-achieved work cannot close, and actual user approval plus exact final-target composition remain required |
+
+`record-task-rework-basis` records the current correction set before its
+authority decision. Owner decisions use fresh phase obligations, including
+blockers first found during Low settlement. The source review keeps its
+historical counts. Implementation rework and manual behavior
+correction enter `prepare-implementation`. Carry the exact source attempt and
+record, target, finding IDs, obligations, and admitted authority in the native
+rework reason; match its target attempt before recording fresh entry evidence.
+The plan artifact remains optional, but when present its selected metadata and
+complete file digest and byte size must match before implementation resumes.
+
+The final core gate composes reviewed phase evidence with the completed Low
+record and its exact permitted delta. It preserves the consumed ordinal and
+states that the review predates changed bytes.
 
 ## Goal Procedure
+
+The bundled version-35 source follows [Epic orchestration](epic-orchestration.md).
+Ordinary Executor delivery and independent Evaluator assessment cover current work and
+completion after admitted review; final integration includes applicable Epic seams.
+The Coordinator owns bookkeeping and Decisions without an extra assessment cycle.
+Admitted formal snapshots retain their original contracts.
 
 `epic-handler` owns goal-centered member, remediation, and closeout work. It does
 not invoke the task phase skills. `complete-work` returns the work summary, source
@@ -42,28 +69,52 @@ is a guard axis of the finding-class decision. Unverified completion
 returns to evidence; unmet completion and Medium-or-higher findings share the
 explicit authority gate. Inconsistent finding totals return to evidence before
 classification. A first adequate Low-only review alone records either
-finite settlement or the supported bounded hardening handoff. The derived
+finite settlement or the supported bounded hardening handoff. Final evidence assembly and its retained Evaluator follow the core gate before goal assessment. The derived
 `current-rework-obligations` total is not part of the contract. The final-closeout substitute is valid only
-for `goal-kind=epic-closeout` with exact successful validation evidence. Goal
-assessment consumes the carried completion summary and gap counts, their
+for `goal-kind=epic-closeout` with exact successful validation evidence, unchanged implementation and current focused checks under a separate applicability gate. Goal
+assessment consumes the current completion summary and gap counts, their
 consistency when present, and any user direction. A stop direction must produce a
 not-achieved assessment rather than closing the goal.
 
-For a member Task, final Goal approval accepts the assessed outcome and exact
-candidate, including its lifecycle, record, and release-note decisions. An approved
-candidate consumes the Epic envelope's member-Task authority through `task-commit`
-before the handler records closeout with the resulting commit SHA. A
-`changes-requested` decision returns to work before any commit and leaves that
-one-commit authority unused. Final Goal approval is outcome acceptance, not a second
-authorization for the commit effect.
+A blocker first established during Low settlement returns to the same rework
+authority decision. Use remaining remediation authority when available; otherwise
+record the exact current blocker basis and wait at an unset user choice. Carry
+the admitted cause in native rework history before work invalidates its source.
+
+For member Tasks and pre-validation corrections, `record-outcome` records
+`acceptance-source=epic-delegation`, the recoverable `acceptance-authority`, and
+`accepted-target`. The coordinator checks the exact diff, lifecycle, record,
+release-note decisions, and applicable unconsumed grant. At `approve-closeout`,
+`delegated` is guarded against `goal-kind=epic-closeout` and leads to
+`delegated-closeout`, which records the verified commit and residue. No Task-level
+user acceptance is requested. A changed candidate returns to its owner for fresh
+acceptance and affected verification within the existing grant.
+
+Final Epic closeout requires `acceptance-source=user` and actual acceptance of the
+complete Epic result and prepared closeout diff. `approved` leads to `closeout`;
+`changes-requested` returns to work before any closeout commit. Stopped outcomes
+also require a user decision and cannot use delegated acceptance. Each path retains
+its own assessment and exact acceptance evidence.
+
+Stopped core evidence repair passes through the Coordinator's
+`record-stopped-core-gaps` before stopped final Coordinator assembly and Evaluator
+assessment. Carry its gap record in the full assignment beyond the bounded selectors. This path
+reconciles available evidence and preserves unresolved gaps; it cannot enter
+ordinary work or provider review before actual renewed user direction.
 
 Each `choose-user-direction: fix-and-review` decision authorizes its one transition
-back to work and one next-ordinal remediation confirmation. Later rework reaches a fresh unset choice;
+through the exact effect-authority gate back to work and one next-ordinal remediation confirmation. Later rework reaches a fresh unset choice;
 no recorded authorization survives the pass or context restoration. The narrow
 ordinal-two hardening handoff remains available when independently reached, but
 no caller starts that assessment merely to qualify for it.
 
 ## Validation Procedure
+
+The bundled version-34 source follows [Validation orchestration](validation-orchestration.md).
+Audit and re-audit are direct independent Evaluator work. Executors implement authorized
+correction groups with checks; the Coordinator verifies exact accepted group commits
+before re-audit. Final assessment covers admitted technical evidence and integration.
+No private history or native qualification is an ordinary prerequisite.
 
 `epic-handler` uses validation for final epic audit and `epic-validator` uses it
 for cold validation. Baseline, audit, remediation, re-audit, final review, user
@@ -71,6 +122,18 @@ direction, Low settlement, assessment, and closeout stay inside one validation
 session. Audit evidence separates operational result, unresolved confirmation,
 current blockers, eligible Low findings, and total confirmed findings. Total count
 is descriptive and never routes remediation by itself.
+
+`prepare-validation-pass` is the common re-entry point. Initial entry prepares
+the direct audit. An admitted audit or review blocker, including one found during
+Low settlement, re-enters with its exact source, target, findings, assessment
+count, and authority in the native rework reason, then performs `remediate`
+before another audit or review. Preparation records that cause as fresh evidence.
+The original envelope uses a complete Epic audit before assessments one through
+three; after the third completed assessment, confirmation uses only the frozen
+correction set and direct regression surface. A separately granted one-shot
+correction always retains its bounded scope. `record-current-audit-basis` records
+the fresh full or frozen audit after its gap decision; stale earlier audit
+attempts cannot provide the final review's current basis.
 
 Blocking corrections return to remediation only within the caller's existing
 envelope and keep their triggering set. A required corrected-target confirmation
@@ -90,30 +153,53 @@ exhausted authority at `await-user-direction`, complete that action, and stop at
 `choose-user-direction` with the actual choice unset until the user answers.
 Each `fix-and-review` answer authorizes one correction and one next remediation
 confirmation. A broadened objective or changed surface requires a new goal
-revision or work-unit assessment instead.
-Validation assessment consumes the carried completion summary and gap counts,
+revision instead.
+Validation assessment consumes the current completion summary and gap counts,
 their consistency when present, and any user direction. A stop direction must
 produce a not-achieved assessment rather than validating or closing the epic.
 
+At `capture-baseline`, `workflow-owner` distinguishes `epic-handler` from
+`epic-validator`. After assessment, `record-outcome` records the exact result,
+`acceptance-source`, recoverable `acceptance-authority`, and `accepted-target`.
+Only a continuing `epic-handler` with `epic-delegation` may choose `delegated` at
+`approve-closeout` and reach `delegated-closeout`. This internal handoff leaves
+final user acceptance pending for the later Epic closeout Goal.
+
+An independent `epic-validator` retains actual user acceptance: `approved` leads
+to `closeout` after the required candidate acceptance, commit, and residue checks.
+Stopped outcomes also retain user acceptance. The final presentation includes
+lifecycle, dossier disposition, release notes, and any required commit; settle the
+execution dossier under the shared consumer rules before final acceptance.
+
 ## Design Procedure
+
+The bundled version-11 source follows [Design and diagnosis orchestration](design-diagnosis-orchestration.md). Ordinary native roles assess context/discovery, proposal/challenge/quality and approved application, preserving original negative routing and actual exact-diff authority. Final bookkeeping alone creates no new Evaluator dispatch.
 
 `new-project`, `new-feature`, and `refactor` own context, discovery, drafting,
 challenge, quality, exact-diff approval, document application, assessment, and
 closeout. Ouroboros results are leaf evidence. Discovery and drafting do not
 authorize implementation. Quality does not authorize applying a draft. Approval
-binds the exact document diff, and application does not authorize staging, commit,
-publication, or product implementation. Optional branch evidence remains optional
-at merges.
+binds the exact document diff. Application does not itself authorize staging or
+commit; a separately authorized task-commit boundary establishes committed
+delivery input when repository policy requires it. Publication and implementation
+remain separate. QA artifact verdicts remain distinct from operation results,
+and valid issues route to their phase owner. Optional branch evidence remains
+optional at merges.
 
 ## War-room Procedure
+
+The bundled version-11 source follows [Design and diagnosis orchestration](design-diagnosis-orchestration.md). Ordinary native roles assess baseline/investigation, proposal/quality and approved document or no-change delivery. The Coordinator owns cause/scope Decisions; incomplete/no-work delivery remains distinct from fixing a defect.
 
 `war-room` owns safe baseline or reproduction, competing hypotheses, cause and
 scope judgments, proposal quality, exact-diff approval, document application,
 assessment, and closeout. Baseline-quality corrections return to the baseline
 owner; classification and proposal corrections return through investigation or
 the exact supported draft target. Terminal success delivers an approved task,
-epic, or incomplete-investigation document. It never implements the fix or changes
-shared services, stages, commits, or publishes by implication.
+epic, incomplete-investigation document, or evidence-backed no-work outcome. The
+no-work branch retains quality, approval, and document/no-change verification.
+Durable notes use canonical specification, ADR, or operations owners; runtime
+evidence remains private. Document approval never implies staging, committing,
+fix implementation, shared-service changes, or publication.
 
 ## Compatibility classification
 
@@ -129,3 +215,26 @@ start a substitute workflow automatically.
 item, choice, evidence, and route inventory from the current canonical Procedure.
 Its structural classification does not prove that customized instructions have
 equivalent meaning or that Podway executed or verified any external work.
+
+Current readiness requires the compatible ordinary graph and selected evidence
+for all five Procedures. No role snapshot or native qualification is required.
+Declared formal sources retain their genuine delegation contract.
+Preserve every prior file and immutable admitted snapshot. Continue an old
+session only with its supported released handler contract; otherwise retain
+state and explain the separately authorized compatible successor after pending
+effects and writer/descendant quiescence are reconciled. Route managed-source
+replacement through the existing repository-setup boundary before starting a
+new workflow. Prior canonical identity establishes provenance, not new graph
+support or permission to overwrite customizations.
+
+After admitted review evidence, apply the [local-settlement contract](finding-disposition.md#decide-whether-a-correction-needs-another-review) before provider-rework authority. Preserve source negative rows, verify the exact correction and current criteria, then supply the complete composition to the required final Evaluator. `confirm-local-corrections-settled` checks pending repairs before ordinary Low completion. Native backend failures and missing reviewer coverage retain their existing gates.
+
+The explicit [adaptive qualification path](adaptive-procedures.md#guarded-structural-qualification-and-exact-suitability)
+checks native goal mappings, necessary typed capabilities, selected endpoint
+coverage, guarded Evaluator passage, review continuity, acceptance provenance and
+relevant forward effects. It accepts equivalent noncanonical structures and
+retains unknown proof separately from established incompatibility. It does not
+replace the managed canonical/custom/formal inventory above. Known reference
+bindings retain their original contracts; changed/new static semantic definitions
+stay self-contained and receive exact independent suitability before adoption.
+Task, Goal, Validation, Design and Diagnosis use the [adaptive execution consumer](adaptive-execution.md); the canonical tables above describe their original reference contracts.

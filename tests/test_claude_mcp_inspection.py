@@ -8,13 +8,16 @@ which is also the property the inspection is required to have.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import sys
 import tempfile
 import types
 import unittest
+from inspect import signature
 from unittest import mock
 from pathlib import Path
 
@@ -240,6 +243,24 @@ class ClaudeMcpInspectionTest(unittest.TestCase):
             self.module.inspect_claude_mcp("gaori", self.repository, exe, 5.0),
         )
 
+    def test_requested_scope_reads_the_configuration_view(self) -> None:
+        """v0.1.21's bundle scope check consumes the configuration-read registration."""
+        self.write_user_configuration(
+            {
+                "mcpServers": {"mulgae": self.entry(["mcp"])},
+                "projects": {str(self.repository): {"enabledMcpjsonServers": ["mulgae"]}},
+            }
+        )
+        assess = self.module.assess_requested_mcp_scope
+        self.assertEqual(assess(self.inspect(), "global")["status"], "ready")
+        self.assertEqual(assess(self.inspect(), "local")["status"], "scope_mismatch")
+        self.write_project_configuration(
+            {"mcpServers": {"mulgae": self.entry(["mcp", "--project-root", str(self.repository)])}}
+        )
+        self.assertEqual(assess(self.inspect(), "local")["status"], "ready")
+        self.assertEqual(assess(self.inspect(), "global")["status"], "scope_mismatch")
+        self.assertEqual(assess(self.inspect(), "none")["status"], "not_requested")
+
 
 class GlobalInspectorTest(unittest.TestCase):
     """The global inspector is surgery no other gate executes.
@@ -299,6 +320,133 @@ class GlobalInspectorTest(unittest.TestCase):
         )
         self.assertEqual(result, {"status": "configured", "scope": "global"})
         self.assertEqual(calls, [("mulgae", "/bin/mulgae", Path("/"), 5.0)])
+
+
+class GlobalInspectorSorageBindingTest(unittest.TestCase):
+    """The Sorage preflight flag reaches its own parameter, not a per-home one.
+
+    v0.1.21 appended `sorage_upgrade_preflight_complete` to `inspect_global`
+    after the two per-home parameters this edition removes, and the call-site
+    rule drops their two arguments. A signature rule ported from the old
+    replacement would leave `codex_homes` as the fifth parameter: the flag would
+    bind there, the arity gate would still pass, and the Sorage probe would never
+    see it. Only executing the shipped CLI path proves the binding.
+    """
+
+    ARGV = [
+        "inspect_global_tools.py",
+        "--component",
+        "sorage",
+        "--include-sorage-initialization",
+    ]
+
+    def setUp(self) -> None:
+        self.module = load_global_inspector()
+        self.calls: list[tuple[bool, bool]] = []
+
+        def fake_sorage(
+            inspector, root, timeout_seconds, include_initialization, upgrade_preflight_complete=False
+        ):
+            self.calls.append((include_initialization, upgrade_preflight_complete))
+            return {
+                "status": "installed",
+                "installed": True,
+                "executable": "/fake/bin/sorage",
+                "version": "0.1.2",
+                "version_supported": True,
+                "initialization_status": "not_inspected",
+                "probes": {
+                    "version": {"ok": True},
+                    "doctor": {"ok": False, "reason": "upgrade_migration_required"},
+                },
+            }
+
+        # The paired-skill lookup reads the real skill root, which is not what
+        # these tests are about; no Sorage executable or home is touched either.
+        for patch in (
+            mock.patch.object(self.module, "inspect_global_sorage", fake_sorage),
+            mock.patch.object(
+                self.module, "inspect_canonical_agent_skill", lambda *args: {"status": "missing"}
+            ),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def run_cli(self, argv: list[str]) -> dict:
+        output = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(output):
+            exit_code = self.module.main()
+        self.assertEqual(exit_code, 0, output.getvalue())
+        return json.loads(output.getvalue())
+
+    def test_the_signature_has_no_per_home_parameters(self) -> None:
+        self.assertEqual(
+            list(signature(self.module.inspect_global).parameters),
+            [
+                "repository",
+                "timeout_seconds",
+                "include_sorage_initialization",
+                "components",
+                "sorage_upgrade_preflight_complete",
+            ],
+        )
+
+    def test_the_preflight_flag_reaches_the_sorage_probe(self) -> None:
+        payload = self.run_cli(self.ARGV + ["--sorage-upgrade-preflight-complete"])
+        self.assertEqual(self.calls, [(True, True)])
+        self.assertEqual(list(payload["tools"]), ["sorage"])
+        self.assertEqual(
+            payload["tools"]["sorage"]["initialization_probe"]["reason"],
+            "upgrade_migration_required",
+        )
+
+    def test_the_preflight_flag_defaults_off(self) -> None:
+        self.run_cli(self.ARGV)
+        self.assertEqual(self.calls, [(True, False)])
+
+
+class SelectedPodwayPrerequisiteTest(unittest.TestCase):
+    """Selected Podway admission fails closed without its adaptive imports.
+
+    The shipped `inspect_selected_podway` imports the plugin's `shared/`
+    adaptive modules, which import PyYAML and then `jsonschema`. Each import is
+    blocked through `sys.modules`, so the result does not depend on what the
+    machine has installed: the inspector must report `missing-prerequisite`
+    naming the blocked dependency, inspect no Podway state, and leave `sys.path`
+    as it found it. A dependency named `adaptive_admission` instead would mean
+    `shared/` did not ship.
+    """
+
+    def setUp(self) -> None:
+        self.module = load_inspector()
+        self.repository = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: self.repository.rmdir())
+        self.podway_calls: list = []
+        self.module.inspect_podway = lambda *args, **kwargs: self.podway_calls.append(args)
+
+    def inspect_without(self, dependency: str) -> dict:
+        blocked = {dependency: None}
+        if dependency != "yaml":
+            # PyYAML is imported first; a stub keeps the result the same whether
+            # or not it is installed.
+            blocked["yaml"] = types.ModuleType("yaml")
+        path = list(sys.path)
+        with mock.patch.dict(sys.modules, blocked):
+            for name in [name for name in sys.modules if name.startswith("adaptive_")]:
+                del sys.modules[name]
+            result = self.module.inspect_selected_podway(self.repository, 5.0)
+        self.assertEqual(sys.path, path)
+        return result
+
+    def test_a_missing_adaptive_dependency_fails_closed(self) -> None:
+        for dependency in ("yaml", "jsonschema"):
+            with self.subTest(dependency=dependency):
+                result = self.inspect_without(dependency)
+                self.assertEqual(result["selected_procedure"]["status"], "missing-prerequisite")
+                self.assertEqual(result["selected_procedure"]["dependency"], dependency)
+                self.assertEqual(result["selected_procedure"]["interpreter"], sys.executable)
+                self.assertEqual(result["tools"], {})
+                self.assertEqual(self.podway_calls, [])
 
 
 class ClaudeSkillRootTest(unittest.TestCase):

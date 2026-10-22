@@ -61,7 +61,8 @@ skill_paths.each do |path|
   assert((metadata.keys - ALLOWED_FRONTMATTER_KEYS).empty?, "unexpected frontmatter keys: #{name}")
   assert(metadata.key?("name") && metadata.key?("description"), "frontmatter must define name and description: #{name}")
   assert(metadata.fetch("name") == name, "skill name/path mismatch: #{name}")
-  assert(metadata.fetch("description").include?("Use when"), "description lacks trigger: #{name}")
+  # Trigger phrasing is upstream's: v0.1.18–v0.1.21 descriptions no longer all say "Use when".
+  assert(!metadata.fetch("description").to_s.strip.empty?, "skill lacks a description: #{name}")
 
   # The upstream Codex sidecar is the single source of truth for invocation
   # policy. If these ever disagree, a mutating skill could fire without the
@@ -107,7 +108,7 @@ end
 
 # --- host-neutral generated text -------------------------------------------
 
-FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$create-", "$lore-", "$orca-cli", "request_user_input",
+FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$create-", "$lore-", "$herdr", "$humanize", "request_user_input",
                   "--agent codex", ".agents/skills", "${PLUGIN_ROOT}", ".codex/config",
                   "Codex", "aquarium-status", "production-status"].freeze
 
@@ -127,47 +128,11 @@ CODEX_EXEMPTIONS = begin
   path.file? ? JSON.parse(path.read).keys.to_set : Set.new
 end
 
-# Podway requires the installed Procedure copies to match the bundled bytes, so
-# the Procedures that label the `native-codex` route with the other host's name
-# can never be rewritten. Only these phrases are masked, only in files matching
-# their scope, and only where they start a word, so "alternative Codex" is never
-# mistaken for the label; any other forbidden text there still fails.
-# scripts/sync.py keeps the same table and stops when a phrase no longer occurs.
-# `File.fnmatch` without FNM_PATHNAME lets `*` cross `/`, exactly as Python's
-# `fnmatch` does.
-CANONICAL_PHRASES = [
-  ["assets/podway/procedures/*.yaml", "native Codex"],
-  ["assets/podway/procedures/*.yaml", "Native Codex"]
-].freeze
-
-def canonical_phrase_pattern(phrase)
-  /(?<![A-Za-z])#{Regexp.escape(phrase)}/
-end
-
-def mask_canonical_phrases(text, relative)
-  CANONICAL_PHRASES.reduce(text) do |masked, (scope, phrase)|
-    File.fnmatch(scope, relative) ? masked.gsub(canonical_phrase_pattern(phrase), "") : masked
-  end
-end
-
-assert(
-  mask_canonical_phrases("Native Codex, native Codex, Codex CLI", "assets/podway/procedures/x.yaml").include?("Codex"),
-  "canonical-phrase masking must leave every other `Codex` in scope visible"
-)
-assert(
-  mask_canonical_phrases("native Codex", "references/x.md") == "native Codex",
-  "canonical-phrase masking must not apply outside its scope"
-)
-assert(
-  mask_canonical_phrases("alternative Codex", "assets/podway/procedures/x.yaml").include?("Codex"),
-  "canonical-phrase masking must match only where the phrase starts a word"
-)
-
 Pathname.glob(PLUGIN.join("**/*.{md,json,py,yaml}")).sort.each do |path|
   relative = path.relative_path_from(PLUGIN).to_s
   next if relative == "sync-manifest.json"
 
-  text = mask_canonical_phrases(path.read, relative)
+  text = path.read
   FORBIDDEN_TEXT.each do |needle|
     next if needle == "Codex" && CODEX_EXEMPTIONS.include?(relative)
 
@@ -215,8 +180,7 @@ EXTRACT_TABLES = <<~PYTHON
   import ast, json, pathlib
 
   tree = ast.parse(pathlib.Path("scripts/sync.py").read_text())
-  wanted = {"FORBIDDEN", "SIGIL_LITERALS", "EXCLUDED_PLUGIN_ROOT", "EXCLUDED_SKILLS", "CANONICAL_PHRASES", "DELEGATION_NOTE"}
-  whole_rows = {"CANONICAL_PHRASES"}
+  wanted = {"FORBIDDEN", "SIGIL_LITERALS", "EXCLUDED_PLUGIN_ROOT", "EXCLUDED_SKILLS", "DELEGATION_NOTE"}
   found = {}
   for node in tree.body:
       target = getattr(node, "target", None)
@@ -225,8 +189,7 @@ EXTRACT_TABLES = <<~PYTHON
           found[name] = node.value.value
       elif name in wanted:
           found[name] = [
-              [part.value for part in element.elts] if name in whole_rows
-              else element.elts[0].value if isinstance(element, ast.Tuple) else element.value
+              element.elts[0].value if isinstance(element, ast.Tuple) else element.value
               for element in node.value.elts
           ]
   missing = sorted(wanted - set(found))
@@ -254,30 +217,6 @@ assert(
   "#{(sync_tables.fetch('SIGIL_LITERALS').to_set - SIGIL_LITERALS.to_set).to_a.inspect}, " \
   "only in tests/validate.rb #{(SIGIL_LITERALS.to_set - sync_tables.fetch('SIGIL_LITERALS').to_set).to_a.inspect}"
 )
-
-# A Ruby-only phrase would let CI accept text generation rejects, and a
-# Python-only one would leave that text unguarded whenever the tree is checked
-# without regenerating it.
-assert(
-  sync_tables.fetch("CANONICAL_PHRASES").to_set == CANONICAL_PHRASES.to_set,
-  "canonical phrases disagree: only in scripts/sync.py " \
-  "#{(sync_tables.fetch('CANONICAL_PHRASES').to_set - CANONICAL_PHRASES.to_set).to_a.inspect}, " \
-  "only in tests/validate.rb #{(CANONICAL_PHRASES.to_set - sync_tables.fetch('CANONICAL_PHRASES').to_set).to_a.inspect}"
-)
-# Each phrase is tolerated only while it still occurs, and only in files that
-# are still byte-identical to upstream — the reason masking is allowed at all.
-CANONICAL_PHRASES.each do |scope, phrase|
-  scoped = Pathname.glob(PLUGIN.join("**/*")).select(&:file?).select do |path|
-    File.fnmatch(scope, path.relative_path_from(PLUGIN).to_s)
-  end
-  assert(scoped.any? { |path| path.read.match?(canonical_phrase_pattern(phrase)) }, "canonical phrase `#{phrase}` no longer occurs in #{scope}")
-  next unless UPSTREAM_PLUGIN.directory?
-
-  scoped.each do |path|
-    relative = path.relative_path_from(PLUGIN)
-    assert(path.binread == UPSTREAM_PLUGIN.join(relative).binread, "a file whose canonical phrases are masked must be byte-identical to upstream: #{relative}")
-  end
-end
 
 assert(
   skill_paths.any? { |path| path.read.include?("/aquarium:") },
@@ -488,9 +427,9 @@ end
 # exists upstream, or the exclusion has silently stopped applying.
 excluded = sync_manifest.fetch("excluded")
 assert(excluded.include?("assets/hero.png"), "the upstream README banner must stay excluded")
-# Upstream's independent review routes through a Dolgorae capture that runs a
-# Codex Reviewer; this artifact dispatches host subagents and its Orca review is
-# forbidden to use Dolgorae, so no skill here consumes that consumer contract.
+# Upstream keeps the Dolgorae consumer contract only as dormant material for a
+# separately named future route; no shipped route consumes it, so it stays
+# excluded here.
 assert(
   excluded.include?("references/dolgorae-review-contract.md"),
   "the Dolgorae consumer contract must stay excluded while no skill routes through it"
@@ -623,19 +562,24 @@ additions.each do |relative|
 end
 
 # The repository-state inspector is this edition's no-mutation baseline for
-# independent review. Upstream shipped it beside `orca-review` and removed it in
-# v0.1.14, so the edition owns it — under the skill that calls it, which is also
-# what retired the cross-skill path nothing in the sync watched.
-INSPECTOR = "skills/independent-review/scripts/inspect_repository_state.py"
+# Subagent Review. Upstream shipped it beside `orca-review` and removed it in
+# v0.1.14; it moved with its skill when v0.1.20 renamed `independent-review`
+# to `subagent-review` without an alias.
+INSPECTOR = "skills/subagent-review/scripts/inspect_repository_state.py"
 assert(additions.include?(INSPECTOR), "the repository-state inspector must be a recorded addition")
-independent_review = PLUGIN.join("skills/independent-review/SKILL.md").read
+subagent_review = PLUGIN.join("skills/subagent-review/SKILL.md").read
 assert(
-  independent_review.include?("scripts/inspect_repository_state.py"),
-  "independent review must still run the repository-state inspector"
+  subagent_review.include?("scripts/inspect_repository_state.py") && subagent_review.include?("--snapshot") && subagent_review.include?("--compare"),
+  "subagent review must still take and compare the repository-state baseline"
+)
+assert(subagent_review.include?("target.target_digest"), "subagent review must compare only the target digest")
+assert(
+  subagent_review.include?("`aquarium:subagent-reviewer`") && PLUGIN.join("agents/subagent-reviewer.md").file?,
+  "subagent review must dispatch the bundled reviewer it ships"
 )
 assert(
-  !independent_review.include?("../orca-review/"),
-  "independent review must not reach across skill directories for the inspector"
+  !subagent_review.include?("../independent-review/") && !subagent_review.include?("../orca-review/"),
+  "subagent review must not reach into a retired skill directory"
 )
 
 # `fable` is deliberately absent: Opus is the baseline for every delegated role
@@ -655,8 +599,9 @@ Pathname.glob(PLUGIN.join("agents/*.md")).sort.each do |path|
   assert(AGENT_MODELS.include?(agent.fetch("model")), "agent model must be one of #{AGENT_MODELS.join(', ')}: #{relative}")
   # Claude Code ignores these keys on plugin subagents — it only logs a warning,
   # and `claude plugin validate --strict` stays silent — so a declared key would
-  # claim a restriction the agent does not have.
-  %w[permissionMode hooks mcpServers].each do |key|
+  # claim a restriction or behaviour the agent does not have. `initialPrompt` is
+  # documented as "Ignored for plugin subagents".
+  %w[permissionMode hooks mcpServers initialPrompt].each do |key|
     assert(!agent.key?(key), "plugin agents cannot set #{key}; Claude Code ignores it: #{relative}")
   end
   tools = agent.fetch("tools").to_s.split(",").map(&:strip)
@@ -678,6 +623,62 @@ if UPSTREAM_PLUGIN.directory?
       YAML.safe_load(path.read, aliases: false).fetch("id") == path.basename(".yaml").to_s,
       "managed Podway procedure id must match its filename: #{relative}"
     )
+  end
+end
+
+# --- adaptive material ships verbatim ----------------------------------------
+
+# v0.1.20's known sources pin the bundled Procedures by SHA-256, and its
+# capability signatures and operation contracts pin canonical JSON, so the
+# plugin-root `shared/` helpers and the `assets/adaptive/` and `assets/schemas/`
+# data ship verbatim: a rewrite would break a digest nothing regenerates.
+# `shared/` carries no host text. Each tree must hold exactly upstream's files,
+# so a file added or dropped on either side fails, not only one that changed.
+VERBATIM_TREES = %w[shared assets/adaptive assets/schemas].freeze
+
+# Bytecode caches appear whenever a bundled script is imported locally and are
+# not part of the artifact.
+def tree_files(root, directory)
+  Pathname.glob(root.join(directory, "**/*")).select(&:file?)
+          .reject { |path| path.to_s.include?("__pycache__/") }
+          .map { |path| path.relative_path_from(root).to_s }.sort
+end
+
+if UPSTREAM_PLUGIN.directory?
+  VERBATIM_TREES.each do |directory|
+    upstream_files = tree_files(UPSTREAM_PLUGIN, directory)
+    generated_files = tree_files(PLUGIN, directory)
+    assert(!upstream_files.empty?, "upstream no longer ships #{directory}/, which this edition copies verbatim")
+    assert(
+      generated_files == upstream_files,
+      "generated #{directory}/ must hold exactly upstream's files: #{((generated_files - upstream_files) | (upstream_files - generated_files)).inspect}"
+    )
+    generated_files.each do |relative|
+      assert(
+        PLUGIN.join(relative).binread == UPSTREAM_PLUGIN.join(relative).binread,
+        "#{directory}/ must be byte-identical to upstream: #{relative}"
+      )
+    end
+  end
+end
+
+# `shared/` imports these names from `skills/dev-setup/scripts/inspect_tools.py`
+# and `skills/goal-evaluator/scripts/ordinary_assignment.py`, and
+# `inspect_tools.py` imports `shared/` back, so a script rule that renamed one
+# would break the adaptive helpers with no parse or arity failure.
+ADAPTIVE_COUPLINGS = {
+  "skills/dev-setup/scripts/inspect_tools.py" => [
+    "PODWAY_PRIOR_CANONICAL_SHA256 = {", "def podway_v025_workaround_bytes(", "def resolve_repository(",
+    "def inspect_selected_podway(", "class InspectionError"
+  ],
+  "skills/goal-evaluator/scripts/ordinary_assignment.py" => ["def prepare(", "class AssignmentError"]
+}.freeze
+ADAPTIVE_COUPLINGS.each do |relative, needles|
+  path = PLUGIN.join(relative)
+  assert(path.file?, "the adaptive helpers in shared/ import from #{relative}, which was not generated")
+  script = path.read
+  needles.each do |needle|
+    assert(script.include?(needle), "#{relative} must still contain `#{needle}`; the adaptive helpers in shared/ import it")
   end
 end
 

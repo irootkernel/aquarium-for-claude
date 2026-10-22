@@ -1,3 +1,8 @@
 {
-  "references/tool-catalog.md": "1edbf842ad645adb3df5f2c50d05de96fab93c32c8fd65daf3d92991ed677bde"
+  "references/formal-agent-orchestration-v1.md": "3cd2c622b81992d75c0190c574bf7c090ffc2ed171f30a2a6c6081e93da0a22b",
+  "references/native-agent-mappings.md": "4b8218c84d425545fb79f93bd2d2517ac6169ac221aaacd57f0bb7db0ab7260b",
+  "references/ordinary-agent-orchestration-v2.md": "6cee24474ace8a3e6ca28c32756c16a54268d30582a3a060ff62442da7f51f2c",
+  "references/ordinary-agent-orchestration.md": "ae46473a41ee512cbdb9eb6c762ac113e6b813f5958846d01177fe2e93358189",
+  "references/tool-catalog.md": "4ddbe45b01bebdb085e9a3832a1b2dc98eb78fe80c5a32147a8b05a2d4182184",
+  "skills/goal-evaluator/scripts/map_native_delivery.py": "710270b5ec63a9a443d0576afec2ecb022e199182c278b28d22378aee59758e3"
 }

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "aquarium-dev-setup-global-inspection.v5"
+SCHEMA_VERSION = "aquarium-dev-setup-global-inspection.v6"
 GLOBAL_COMPONENTS = (
     "sanho",
     "dolgorae",
@@ -173,56 +173,29 @@ def inspect_global_podway(
     tool["agent_skill"] = inspect_canonical_agent_skill(
         inspector, "use-podway", inspector.PODWAY_SKILL_FILES
     )
+    tool["identity"] = None
     if not tool["installed"]:
-        tool["daemon"] = {
-            "installed": False,
-            "loaded": False,
-            "reachable": False,
-            "running": False,
-            "version": None,
-            "target": None,
-            "ready": False,
-            "mode": None,
-            "readiness_state": None,
-            "readiness_stage": None,
-            "readiness_elapsed_ms": None,
-            "worktree_recovery": None,
-            "status": "missing",
-            "versions_match": False,
-            "probe": inspector.skipped_probe("executable_missing"),
-        }
+        tool["probes"]["identity"] = inspector.skipped_probe("executable_missing")
         return tool
-    daemon_probe = inspector.json_probe(
-        [
-            tool["executable"],
-            "--json",
-            "daemon",
-            "wait-ready",
-            "--timeout",
-            f"{inspector.PODWAY_DAEMON_WAIT_SECONDS:g}s",
-        ],
-        neutral_cwd,
-        max(timeout_seconds, inspector.PODWAY_DAEMON_CALLER_TIMEOUT_SECONDS),
+    probe = (
+        inspector.json_probe(
+            [tool["executable"], "--json", "version", "--identity"],
+            neutral_cwd,
+            timeout_seconds,
+        )
+        if tool["version_supported"]
+        else inspector.skipped_probe("unsupported_version")
     )
-    normalized, daemon = inspector.normalize_podway_daemon_probe(daemon_probe)
-    versions_match = bool(
-        tool.get("version")
-        and daemon["version"]
-        and inspector.normalized_version(tool["version"])
-        == inspector.normalized_version(daemon["version"])
-    )
-    configured = bool(
+    normalized, identity = inspector.normalize_podway_identity(probe)
+    tool["probes"]["identity"] = normalized
+    tool["identity"] = identity
+    if not (
         normalized["ok"]
-        and daemon["ready"]
-        and daemon["target"] == "aarch64-apple-darwin"
-        and versions_match
-    )
-    tool["daemon"] = {
-        **daemon,
-        "status": "configured" if configured else "degraded",
-        "versions_match": versions_match,
-        "probe": normalized,
-    }
+        and identity is not None
+        and inspector.normalized_version(identity["version"])
+        == inspector.normalized_version(tool["version"])
+    ):
+        tool["status"] = "degraded"
     return tool
 
 
@@ -231,6 +204,7 @@ def inspect_global_sorage(
     root: Path,
     timeout_seconds: float,
     include_initialization: bool,
+    upgrade_preflight_complete: bool = False,
 ) -> dict[str, Any]:
     neutral_cwd = Path(root.anchor)
     tool = inspect_versioned_cli(
@@ -256,6 +230,21 @@ def inspect_global_sorage(
     if not include_initialization:
         tool["initialization_status"] = "not_inspected"
         tool["probes"]["doctor"] = inspector.skipped_probe("not_requested")
+        return tool
+    upgrade_state = inspector.sorage_upgrade_preflight_state(neutral_cwd)
+    if upgrade_state == "pre_memo":
+        upgrade_state = inspector.sorage_validated_pre_memo_state(
+            upgrade_state,
+            inspector.sorage_config_validation_probe(
+                tool["executable"], neutral_cwd, timeout_seconds
+            ),
+        )
+    reason = inspector.sorage_upgrade_skip_reason(
+        upgrade_state, upgrade_preflight_complete
+    )
+    if reason is not None:
+        tool["initialization_status"] = "not_inspected"
+        tool["probes"]["doctor"] = inspector.skipped_probe(reason)
         return tool
     doctor_probe = inspector.json_probe(
         [tool["executable"], "doctor", "--json"], neutral_cwd, timeout_seconds
@@ -295,6 +284,7 @@ def inspect_global(
     timeout_seconds: float,
     include_sorage_initialization: bool = False,
     components: tuple[str, ...] | None = None,
+    sorage_upgrade_preflight_complete: bool = False,
 ) -> dict[str, Any]:
     inspector = load_inspector()
     root = resolve_working_directory(repository)
@@ -340,6 +330,7 @@ def inspect_global(
             root,
             timeout_seconds,
             include_sorage_initialization,
+            sorage_upgrade_preflight_complete,
         )
     if "podway" in requested_components:
         raw_tools["podway"] = inspect_global_podway(inspector, root, timeout_seconds)
@@ -405,7 +396,8 @@ def inspect_global(
                 if key in raw:
                     entry[key] = raw[key]
         if name == "podway":
-            entry["daemon"] = raw["daemon"]
+            entry["identity"] = raw["identity"]
+            entry["identity_probe"] = raw["probes"]["identity"]
         if name == "sorage":
             entry["initialization_status"] = raw.get("initialization_status")
             entry["initialization_probe"] = raw["probes"]["doctor"]
@@ -440,7 +432,7 @@ def parse_arguments() -> argparse.Namespace:
         "--timeout-seconds",
         type=float,
         default=10.0,
-        help="Timeout for each ordinary read-only command; Podway readiness uses its fixed catalog wait",
+        help="Timeout for each read-only command",
     )
     parser.add_argument(
         "--component",
@@ -452,6 +444,11 @@ def parse_arguments() -> argparse.Namespace:
         "--include-sorage-initialization",
         action="store_true",
         help="Include the selected local Sorage initialization diagnostic",
+    )
+    parser.add_argument(
+        "--sorage-upgrade-preflight-complete",
+        action="store_true",
+        help="Confirm that the selected pre-Memo Sorage installation passed backup and restore preflight",
     )
     arguments = parser.parse_args()
     if (
@@ -468,6 +465,14 @@ def parse_arguments() -> argparse.Namespace:
         raise InspectionError(
             "invalid_arguments",
             "--include-sorage-initialization requires the sorage component",
+        )
+    if (
+        arguments.sorage_upgrade_preflight_complete
+        and not arguments.include_sorage_initialization
+    ):
+        raise InspectionError(
+            "invalid_arguments",
+            "--sorage-upgrade-preflight-complete requires --include-sorage-initialization",
         )
     arguments.component = tuple(
         name for name in GLOBAL_COMPONENTS if name in selected_components
@@ -489,6 +494,7 @@ def main() -> int:
                 arguments.timeout_seconds,
                 arguments.include_sorage_initialization,
                 arguments.component,
+                arguments.sorage_upgrade_preflight_complete,
             )
         )
         return 0

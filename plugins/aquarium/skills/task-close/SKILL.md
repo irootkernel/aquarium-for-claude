@@ -9,6 +9,10 @@ disable-model-invocation: true
 
 > **Claude Code delegation:** when this skill, or a reference or Procedure node it follows, hands a step to another Aquarium skill — however it phrases the hand-off, and whether it writes `/aquarium:<name>` or names the skill bare — read that skill's `SKILL.md` in full from this plugin (`../<name>/SKILL.md` from this skill's directory) and follow it as the delegated step instead of calling the Skill tool. Claude Code reserves most Aquarium skills for the user to type: it refuses the Skill tool for them and, once it has refused, forbids carrying out their workflow any other way. When you hand such a step to a subagent, put that file's absolute path in its assignment and have it read the file, because a subagent cannot load a gated skill through the Skill tool. Running another skill's bundled script is not a hand-off. A continuation request, routed repair, offer, or recommendation that the text has you return or report to the user is not a delegation: name its slash command, do not run it yourself, and stop where the text stops.
 
+For an ordinary Task handler, require the applicable complete final `aquarium.evaluator-assessment/v3` and exact final candidate composition from [Task orchestration](../../references/task-orchestration.md). An Evaluator pass supplements all closeout gates and grants no user approval or commit authority.
+
+Read [commit-attribution.md](../../references/commit-attribution.md) for message formatting and change origins, within this skill's existing effect boundaries.
+
 Close only the reviewed task established by `/aquarium:task-handler`. When invoked directly, require the repository, roadmap path, task ID, final task diff, verification summary, documentation state, already authorized review route or waiver, and the selected route's complete evidence. Direct invocation grants no route-selection or waiver authority. Read [review-routing-contract.md](../../references/review-routing-contract.md), [evidence-residency.md](../../references/evidence-residency.md), and [finding-disposition.md](../../references/finding-disposition.md). This phase owns completion evidence and lifecycle selection; `/aquarium:task-commit` owns any actual commit.
 
 ## Assemble Existing Evidence
@@ -17,20 +21,22 @@ Determine whether repository authority makes an authorized commit, publication, 
 
 Assemble evidence already produced by the agent and explicitly supplied by the user. Do not rerun user-confirmed tests or documentation checks solely to mark the task complete or prepare a commit. Repository-required hooks, generators, and synchronization commands still apply when they cannot be waived; disclose and report them separately.
 
-Confirm that approved requirements, applicable verification, deslop, optimization, durable documentation, selected-route completion assessment, and finding dispositions are represented in the final task evidence. Require the route-neutral fields from the shared routing contract, including the consumed `assessment-ordinal` and `assessment-kind` when applicable, plus the exact reviewed and final target identities. Admit only a completed evidence combination for the selected route. An incomplete or failed delegated operation cannot support closeout.
+Confirm that approved requirements, applicable verification, due refinement (including Deslop and optimization when required), durable documentation, selected-route completion assessment, and finding dispositions are represented in the final task evidence. Require the route-neutral fields from the shared routing contract, including the consumed `assessment-ordinal` and `assessment-kind` when applicable, plus the exact reviewed and final target identities. Admit only a completed evidence combination for the selected route. An incomplete or failed delegated operation cannot support closeout.
 
-For Mulgae, retain its exact root or verified composite, reviewer provenance, committed publication, complete coverage, successful findings query, and passing backend check. For Orca or native Claude Code, require authoritative native lifecycle or host-delegation evidence, reviewer provenance, and `backend-check-result=not-provided`. For a waiver, require explicit waiver authority, `assessment-provenance=coordinator-waiver`, the exact target, reason, assurance limitation, and `backend-check-result=not-provided`; record `review waived` and do not imply that a reviewer ran. Never require or invent another route's native evidence.
+For Mulgae, retain its exact root or verified composite, reviewer provenance, committed publication, complete coverage, successful findings query, and passing backend check. For Herdr or Subagent Review, require authoritative native lifecycle or host-delegation evidence, reviewer provenance, and `backend-check-result=not-provided`. For a waiver, require explicit waiver authority, `assessment-provenance=coordinator-waiver`, the exact target, reason, assurance limitation, and `backend-check-result=not-provided`; record `review waived` and do not imply that a reviewer ran. Never require or invent another route's native evidence.
 
 Successful closeout also requires current workflow verification, zero `unmet` and zero `unverified` completion criteria, no unresolved valid Medium-or-higher or confirmation-needed finding, and complete disposition of every admitted Low finding. A waiver removes only delegated review. It does not remove verification or completion assessment. Do not invent a terminal state when the roadmap lacks one.
 
-When the review predates an accepted Low-only delta, require the complete
-Low-settlement composition defined by the shared finding-disposition contract.
+When the review predates an accepted local-settlement delta, require the complete
+local-settlement composition defined by the shared finding-disposition contract.
 Verify that the final diff contains only that permitted
 delta plus separately approved lifecycle and promoted-evidence changes. Do not
 request another provider review solely because the target changed in this allowed
 way. Reject any stale, failed, ambiguous, or additional change.
 
 Keep final evidence in the orchestration report and native runtime. Do not add a completion log or validation record to the roadmap, and never treat an ignored runtime path or run ID as durable documentation.
+
+Verify any repository-required task-linked dossier settlement is already part of the reviewed documentation candidate. In a standing group such as Aquarium's `EPIC-000`, close this Task's dossier after durable promotion and shared-consumer checks while preserving the parent group's active status. If the candidate omitted that work, return it to the owning handler phase for correction and required checks. Local eligibility applies through an admitted review's classification; closeout does not add an edit or bypass that graph entry.
 
 ## Select the Terminal Status
 
@@ -40,9 +46,17 @@ Preserve an existing terminal state. For a non-terminal task, show its exact cur
 
 If the user keeps the task non-terminal or cancels, do not commit and return the exact remaining gap. Otherwise show the exact proposed status-only edit before asking for final approval.
 
+For an actually used Procedure with successful operation and distinct future
+reuse value, follow [Procedure preservation](../../references/procedure-promotion.md#closeout-callers)
+to prepare the read-only grouped offer with this closeout presentation. Return
+any exact content consent and separate promotion grant in the ordinary handoff;
+the parent applies it only after original finalization. Under an Epic envelope,
+let its Coordinator group member candidates at Epic closeout. Skip this when no
+eligible Procedure was used.
+
 ## Ask for Final Approval
 
-Present or identify the exact final task diff, selected status edit, and whether a commit is proposed. Use structured `AskUserQuestion` and ask all three questions together:
+Present or identify the exact final task diff, selected status edit, record decision as an exact proposed edit or explicit `no record edit`, and whether a commit is proposed. Include any dossier disposition already settled in that diff. Use structured `AskUserQuestion` and ask all three questions together:
 
 1. Tests: "Have you reviewed the current applicable test evidence, including who ran each check, and accepted it for this final implementation?" Offer `Evidence accepted`, `Not yet or failed`, and `Not applicable`.
 2. Documentation: "Have you reviewed and accepted the documentation and roadmap changes in this final diff?" Offer `Docs approved`, `Needs revision`, and `Not applicable`.
@@ -56,10 +70,14 @@ If any answer is negative, pending, ambiguous, or inconsistent with a required g
 
 Only after all three answers are affirmative, apply the exact approved status edit and run mandatory status-specific documentation synchronization or validation not covered by current evidence. The approved status-only edit does not invalidate approval; any other task-owned code, test, documentation, or roadmap change does, so show the updated final diff and ask again.
 
-For `Approve and close without commit`, do not stage or commit anything. Verify the task is terminal while the complete task-owned diff remains uncommitted. This path is unavailable when repository authority requires a commit for completion.
+For `Approve and close without commit`, do not stage or commit anything. Verify the task is terminal while the complete task-owned diff remains uncommitted, and return the approved lifecycle and record decisions, including explicit absence of a record edit. This path is unavailable when repository authority requires a commit for completion.
 
-For `Approve and commit`, invoke `/aquarium:task-commit` with a closeout handoff naming the repository, canonical roadmap path, exact task ID, approved terminal status edit, exact commit scope, the documented `entry`, `intentional no-note`, or `not-enrolled` release-note decision, verification evidence, `review-route`, `review-operation`, `review-evidence-reference`, `backend-check-result`, `assessment-provenance`, consumed `assessment-ordinal` and `assessment-kind` when applicable, waiver summary when applicable, exact reviewed and final target identities, the accepted Low-only composition fields or their explicit inapplicability, zero or more approved promoted manifest path and digest pairs plus their owning-workflow native validation results or their explicit absence, and the user's one-commit authorization. Include Mulgae-specific evidence only for the Mulgae route. For Orca, native Claude Code, or waiver, state explicitly that no hardening deferral applies.
+For `Approve and commit`, invoke `/aquarium:task-commit` with a closeout handoff retaining the verified `change-origin` and naming the repository, canonical roadmap path, exact task ID, approved terminal status edit, approved record edit or explicit `no record edit`, exact commit scope, the documented `entry`, `intentional no-note`, or `not-enrolled` release-note decision, verification evidence, `review-route`, `review-operation`, `review-evidence-reference`, `backend-check-result`, `assessment-provenance`, consumed `assessment-ordinal` and `assessment-kind` when applicable, waiver summary when applicable, exact reviewed and final target identities, the complete accepted local-settlement composition or its explicit inapplicability, zero or more approved promoted manifest path and digest pairs plus their owning-workflow native validation results or their explicit absence, and the user's one-commit authorization. Include Mulgae-specific evidence only for the Mulgae route. For Herdr, Subagent Review, or waiver, state explicitly that no hardening deferral applies.
 
 Do not stage or commit independently. The handoff grants no amend, push, PR, release, or unrelated staging authority.
 
-Return the three answers, final roadmap state, selected terminal status, release-note target and decision, mandatory commands and exit codes, task-commit result and commit identifier when created, publication state, and remaining gaps to the orchestrator.
+Return the three answers, final roadmap state, selected terminal status, approved lifecycle and record decisions, dossier disposition when applicable, release-note target and decision, mandatory commands and exit codes, task-commit result and commit identifier when created, publication state, and remaining gaps to the coordinator.
+
+When a Podway-backed handler delegates this phase, identify this session's final-closeout continuation in any commit handoff and return the verified commit or permitted no-commit result with Podway finalization pending. The current Aquarium caller must follow [Finalize Before Reporting Completion](../../references/podway-integration.md#finalize-before-reporting-completion) before declaring the handler complete. This leaf result does not establish that the session is completed; a standalone invocation does not activate Podway by implication.
+
+For an admitted adaptive Task, use the mapped acceptance and closeout placements under [adaptive execution](../../references/adaptive-execution.md). Preserve the exact accepted candidate and actual commit evidence. Interrupted native finalization resumes the same session without repeating a successful commit; this leaf never declares native completion.

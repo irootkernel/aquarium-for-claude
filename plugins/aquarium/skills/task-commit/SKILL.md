@@ -1,22 +1,30 @@
 ---
 name: task-commit
-description: "Prepare and create one authorized Git commit while reconciling roadmap task lifecycle state and preserving unrelated work. Use when the user asks to commit in a repository that may contain a roadmap, when an Aquarium handler hands off an approved commit, or when a direct roadmap-repository commit must pass the Aquarium commit gate."
+description: "Create one authorized commit for an approved Aquarium handler handoff, an explicit /aquarium:task-commit request, or a direct commit subject to the repository's Aquarium roadmap gate. Preserve unrelated work and reconcile task lifecycle only when applicable."
 ---
 
 # Task Commit
+
+Read [commit-attribution.md](../../references/commit-attribution.md) for message formatting and change origins, within this skill's existing effect boundaries.
 
 Create one authorized commit through a shared roadmap-aware boundary. Read [evidence-residency.md](../../references/evidence-residency.md), [finding-disposition.md](../../references/finding-disposition.md), and [release-notes.md](../../references/release-notes.md). This skill owns commit preparation and execution, including one release-note hunk accepted as exact text through direct approval or a valid handler handoff, not implementation evidence, task completion judgment, Podway mutation, publication, or release.
 
 ## Establish the Commit Boundary
 
 1. Resolve the Git root and read all applicable instructions, commit conventions, branch and upstream state, staged, unstaged, untracked, and conflicted changes.
-2. Resolve effective `user.name` and `user.email` with their Git configuration scopes and origins. Require a non-empty winning value for each key from `local` or `worktree` scope; system, global, and command scope do not satisfy this repository-specific identity requirement even when their values match. Record the exact values, scopes, and origins as the commit identity snapshot. Do not create `.aquarium`, another identity file, or a duplicate configuration owner.
-3. Identify tracked roadmap candidates: paths whose basename or directory contains `roadmap` and whose content defines lifecycle states such as `In Progress`, `In Review`, `Completed`, `Blocked`, or `Deferred`. Read the relevant task entries and their exact vocabulary.
-4. Inspect the current Claude Code session goal. When Podway was not explicitly opted out for the managed workflow, inspect only the bounded current-session facts needed to reconcile the commit with active Aquarium work. The commit boundary itself does not mutate Podway, but the same Aquarium caller may record the verified post-commit disposition immediately afterward.
+2. Establish roadmap enrollment from tracked candidates: paths whose basename or directory contains `roadmap` and whose content defines lifecycle states such as `In Progress`, `In Review`, `Completed`, `Blocked`, or `Deferred`. Read the relevant task entries and their exact vocabulary.
+3. Resolve effective Git identity under the repository's rules. In a repository with a roadmap, require non-empty winning `user.name` and `user.email` values from `local` or `worktree` scope; matching system, global, or command values do not satisfy that requirement. Record their exact values, scopes, and origins. Without a roadmap, follow native Git and repository identity rules, including permitted global configuration, and snapshot the resolved author and committer identities. Do not create `.aquarium`, another identity file, or a duplicate configuration owner.
+4. Inspect the current Claude Code session goal. When Podway was not explicitly opted out for the managed workflow, inspect only the bounded current-session facts needed to reconcile the commit with active Aquarium work. The commit boundary itself does not mutate Podway. With Podway active, the current Aquarium caller must resume the approved workflow and apply [Podway finalization](../../references/podway-integration.md#finalize-before-reporting-completion) after receiving the verified result for this session's final closeout.
 5. Record the requested commit scope and authority. A request to commit authorizes neither amend, push, PR changes, release work, destructive actions, nor unrelated staging.
 6. Inspect Project Configuration for the exact `Aquarium release notes: <repository-relative-path>` declaration. When enrolled, run the release-handler's read-only inspector and require exactly one structurally valid open target unless the commit is the release commit that closes it or the separately approved post-release commit that opens its successor.
 
-When a commit belongs to active Podway-managed Aquarium work, require an explicit commit handoff from the current Aquarium execution context. Accept it regardless of which Aquarium skill started or advanced the session; never require returning to a prior skill. For the normal completion of a planned Epic member Task, require both the unchanged approved `epic-handler` envelope as commit-effect authority and final Goal approval of the exact candidate. Do not ask the user to authorize the commit effect again when both remain current and complete. Do not extend that carried authority to reopened-task corrections, remediation, Epic closeout, checkpoints, or additional commits, and do not offer an independent path around the managed workflow's approvals and evidence.
+When a commit belongs to active Podway-managed Aquarium work, require an explicit commit handoff from the current Aquarium execution context. Accept it regardless of which Aquarium skill started or advanced the session; never require returning to a prior skill. A standalone `task-handler` or `task-close` handoff uses actual user acceptance and direct one-commit authority under its existing Task workflow, even when the Task belongs to an Epic.
+
+The Podway-backed caller's handoff states whether the commit settles this session's terminal closeout or leaves required work inside this same session. A member-Task or pre-validation correction closeout can be final for its session while further Epic validation remains; a correction group within an active Validation session is intermediate.
+
+For normal completion of a member Task executed under an approved `epic-handler` envelope, require that unchanged envelope's member grant and the coordinator's delegated acceptance of the exact candidate. For an owned correction, including a reopened Task or pre-validation correction, require that envelope's explicit correction grant or separate direct authority. Final Epic closeout requires actual user acceptance of the complete Epic result and exact closeout candidate plus the envelope's conditional closeout grant or direct authority. Preserve the acceptance source, authority reference, exact candidate, and applicable unconsumed grant. Never record a delegated acceptance as a user decision, reuse a consumed grant, or ask for another commit approval when the handoff already carries current acceptance and authority.
+
+For a validation-remediation commit, require the invoking workflow's explicit one-commit grant for the owned correction group: the continuing Epic execution envelope's correction grant, the independently approved `epic-validator` envelope, or separate direct authority. Require acceptance of its exact verified diff by the user or under their current delegation. Bind it to the active validation session, source audit or review findings, owner, affected checks, and pending whole-Epic confirmation. A correction commit precedes that confirmation and does not establish completed Epic acceptance. A normal member-Task grant alone cannot authorize it.
 
 ## Reconcile Roadmap Context
 
@@ -31,18 +39,38 @@ When the commit is outside managed workflow work:
 
 A handler commit handoff must include:
 
-- repository, canonical roadmap path, exact task or epic ID, exact commit scope, and the authorization source: either the user's direct one-commit authorization or, for a normal planned Epic member-Task completion, the current approved Epic envelope plus final Goal approval of the exact candidate;
+- the verified `change-origin` and its fully qualified `workflow-owner` under the shared attribution contract;
+- repository, canonical roadmap path, exact task or epic ID, exact commit scope, and the authorization source: direct user one-commit authority; the Epic envelope's applicable member, correction, or conditional closeout grant; or the independent validation envelope's owned-correction grant. An `epic-handler` handoff also names `acceptance-source` (`user` or `epic-delegation`), its recoverable `acceptance-authority`, exact `accepted-target`, and the applicable unconsumed grant;
 - the lifecycle decision as either an exact approved edit or an explicit statement that no lifecycle edit applies;
+- for a Podway-backed workflow, the current session's continuation: final closeout, or required work remaining inside that session;
 - the record decision as either an exact approved edit or an explicit statement that no record edit applies;
 - verification and review evidence identifying command, actor, exit status, exact reviewed and final target identities, verdict, `review-route`, `review-operation`, `review-evidence-reference`, `backend-check-result`, `assessment-provenance`, consumed `assessment-ordinal` and `assessment-kind` when applicable, and waiver summary when applicable. Include a Mulgae run only for the Mulgae route; mark every inapplicable route-specific field explicitly rather than inventing an identity.
-- the complete Low-settlement composition defined by the shared finding-disposition contract, or an explicit statement that no accepted Low-only delta applies;
-- the release-note decision as exact `entry` text already present in the approved diff, `intentional no-note`, or `not-enrolled`; for a member Task, final Goal approval must cover that exact decision and any entry bytes;
-- zero or more staged promoted-evidence manifest paths paired with exact `sha256:<64-hex>` manifest digests and the owning workflow's current native-evidence, native-target-digest, and copied-projection validation result, or an explicit statement that no promoted evidence applies;
-- for an epic member task with a hardening deferral, the exact current Mulgae run and finding IDs, committed publication, successful findings query, exact finding membership, authoritative native target digest, and promoted-manifest digest used for pre-commit verification. Every Orca, native Claude Code, or waiver handoff must instead state explicitly that no hardening deferral applies because those routes cannot supply the required native digest, publication, findings-query, and membership evidence.
+- the complete local-settlement composition defined by the shared finding-disposition contract, or an explicit statement that no accepted local delta applies;
+- the release-note decision as exact `entry` text already present in the accepted diff, `intentional no-note`, or `not-enrolled`; delegated Epic acceptance must cover that exact decision and any entry bytes, while final Epic closeout requires actual user acceptance;
+- zero or more staged promoted-evidence manifest paths paired with exact `sha256:<64-hex>` manifest digests and the owning workflow's current native-evidence, schema-specific native-target-binding, and copied-projection validation result, including retained preflight and source-consistency observation for v2, or an explicit statement that no promoted evidence applies;
+- for an epic member task with a hardening deferral, the exact current Mulgae run and finding IDs, committed publication, successful findings query, exact finding membership, verified schema-specific native target binding, and promoted-manifest digest used for pre-commit verification. Every Herdr, Subagent Review, or waiver handoff must instead state explicitly that no hardening deferral applies because those routes cannot supply the required native digest, publication, findings-query, and membership evidence.
 
 Reject a stale, ambiguous, or incomplete handoff rather than reconstructing approval.
 
-A release-handler commit handoff must name the repository, intended and previous versions, exact operation (`settlement`, `retarget`, `release`, or `next-cycle`), changelog path and approved hunk, exact commit scope, `intentional no-note`, applicable QA and release-gate evidence or their explicit inapplicability, and the user's one-commit authorization. It grants no push, tag, hosted Release, destructive replacement, or later commit authority.
+A validation-remediation handoff identifies the source assessment separately from the pending assessment of corrected bytes. Before the first delegated review, carry the exact direct-audit evidence and explicitly mark the source review fields inapplicable. After a review, carry its actual route, operation, ordinal, and findings. In both cases, include the exact correction scope, verification, lifecycle and record decisions, release-note decision, candidate acceptance, and remediation commit authority. Do not require a per-group provider review or represent source findings as review coverage of the correction. Final validation acceptance remains pending until the owning workflow completes its whole-Epic assessment.
+
+A design or diagnostic delivery-input handoff uses the same fields, retains its verified `change-origin`, and names its owning workflow and current session when present. If no task or epic applies, record that relationship explicitly instead of inventing an ID; when no roadmap exists, mark its path inapplicable. Preserve the actual design or diagnostic quality evidence and mark Task-review-specific fields inapplicable. Require separate one-commit authority and exact candidate acceptance; this variant carries no member-Task commit grant.
+
+A Procedure-library promotion handoff is separate from the original completed
+work. Follow [Procedure promotion](../../references/procedure-promotion.md):
+require specific accepted whole/fragment content and exact paths/diff, original
+accepted commit or verified no-commit and required native finalization, source
+checks and applicable review/settlement/acceptance, and an explicit unconsumed
+promotion commit grant. Preserve the true originating workflow, Task and Epic;
+record no original lifecycle or status-record edit. Broad editing authority or
+the original member grant does not cover this commit. Content consent without a
+matching commit grant leaves the approved library diff uncommitted. Never amend
+the original closeout or reopen its completed goal because optional promotion
+is declined or delayed. Add no preservation-only mandatory multiagent review.
+
+A release-handler commit handoff must retain its verified `change-origin` and name the repository, intended and previous versions, exact operation (`settlement`, `retarget`, `release`, or `next-cycle`), changelog path and approved hunk, exact commit scope, `intentional no-note`, applicable QA and release-gate evidence or their explicit inapplicability, and the user's one-commit authorization. It grants no push, tag, hosted Release, destructive replacement, or later commit authority.
+
+For a direct commit following a separately completed Aquarium workflow, consume its verified `change-origin` without treating that result as commit authority. Recheck the origin against the intended diff and keep its original skill; do not replace setup or design origins with `task-commit`. An unavailable or stale supplied origin must be resolved before committing. Existing direct-commit relationship and release-note approvals still apply.
 
 For a direct commit without a managed-workflow handoff, inspect the complete intended diff and require the user to approve one exact concise entry or `intentional no-note` when release notes are enrolled. If an entry is needed but absent, show one proposed changelog hunk and obtain approval before applying it.
 
@@ -50,7 +78,19 @@ Apply no other documentation change, re-run the release-notes inspector and appl
 
 ## Prepare the Exact Commit
 
-Apply only the lifecycle or record edit explicitly selected by the user or supplied by a valid handler handoff. Preserve the selected task's exact current state for an approved checkpoint. For a direct commit, any other code, test, documentation, or roadmap change after approval makes that approval stale. For a planned Epic member Task, implementation inside the approved envelope before final Goal approval is expected; any candidate change after that approval or its handoff makes the exact-candidate acceptance stale.
+Apply only the lifecycle or record edit explicitly selected by the user or supplied by a valid handler handoff. Preserve the selected task's exact current state for an approved checkpoint. Any candidate change after acceptance or its handoff makes that exact-candidate acceptance stale. For delegated Epic work, return the changed candidate to `epic-handler` for fresh evidence and acceptance within the current grant; do not demand user acceptance merely because the candidate changed. Direct user acceptance and final Epic acceptance must be renewed by the user when their accepted candidate changes.
+
+Follow [directory agent guidance](../../references/directory-agent-guidance.md)
+when checking the accepted composition. For a handler handoff, affected canonical
+documents and guides belong to the reviewed candidate or its exact accepted and
+verified settlement delta; verify that the staged diff contains them unchanged,
+together with the accepted implementation and tests. For a direct commit, the
+diff the user accepted is that composition. Return only a difference between the
+staged diff and the accepted composition to its owner. Do not judge whether
+documentation is complete or consistent, and do not author or append semantic
+guide changes during commit preparation. Preserve the exact authorized lifecycle,
+record and release-note preparation operations above; any resulting candidate
+still needs its applicable exact acceptance.
 
 Require the release-note decision to match the final diff. An `entry` must appear exactly once under the current open target in the authorized changelog path. `intentional no-note` normally permits no changelog edit, and `not-enrolled` is valid only when no authority is declared.
 
@@ -58,40 +98,46 @@ With an exact `/aquarium:release-handler` handoff, `intentional no-note` may inc
 
 Stage only the authorized paths or hunks. Preserve unrelated staged and unstaged work; stop if the commit scope cannot be isolated safely. Immediately before committing, re-read the staged roadmap entry, `git diff --cached`, staged tree and blob identities, and full Git status. Confirm that:
 
-- the effective repository-specific `user.name` and `user.email`, including their scopes and origins, still match the commit identity snapshot;
+- the applicable identity snapshot still matches: repository-specific `user.name` and `user.email` with scopes and origins when a roadmap is present, otherwise the resolved native author and committer identities;
 - the selected task relationship and approved terminal or unchanged-checkpoint status still match the user's answer;
 - the handler handoff's lifecycle or record edit, including an explicit absence, still matches the staged snapshot;
 - a declared unrelated commit contains no unintended task lifecycle transition;
-- the reviewed implementation plus any exact accepted and locally verified Low-only delta, approved lifecycle or record decision, and approved post-review promoted-evidence packages equal the staged diff;
+- for a completion commit, the reviewed implementation plus any exact accepted and verified local-settlement delta, accepted lifecycle or record decision, and accepted post-review promoted-evidence packages equal the staged diff; for a validation-remediation commit, the accepted verified correction and its explicitly approved decisions equal that diff while whole-Epic confirmation remains pending;
 - unrelated pre-existing staged content is absent from the intended commit.
 
 For an explicitly authorized amend, inspect the existing HEAD's parent, author, message, complete diff, and live remote publication state. Require one unambiguous unpublished HEAD whose existing content and staged delta both belong to the approved replacement. Record the intended full staged tree, parent, author, and message before amending. Stop if publication cannot be ruled out, the existing commit includes unrelated work, or the replacement scope is unclear.
 
-An accepted Low-only composition may differ from the provider-reviewed target only
+An accepted local-settlement composition may differ from the provider-reviewed target only
 by its enumerated verified delta. Do not require or launch another provider review
-for that difference. Reject an unknown source basis, nonzero pending disposition or
+for that difference. Reject an unknown source basis, nonzero pending Low disposition, local correction or
 current blocker count, failed or stale local check, mismatched final target, or any
 extra path or hunk. This commit skill never owns review dispatch.
 
-Before a non-trivial commit, reference `/lore-commits` and follow it when available. Repository-required IDs and prefixes override Lore, which never grants commit authority. If Lore is required but unavailable, stop and return an exact `/aquarium:dev-setup-global` continuation request. Otherwise report its absence once, inspect `git log -5 --format=fuller`, and match the recurring subject, body, and trailer structure; inspect all commits when fewer than five exist and use a concise imperative subject when none exist.
+Before a non-trivial commit, reference `/lore-commits` and follow it when available. Repository-required IDs and prefixes override Lore, which never grants commit authority. If Lore is required but unavailable, stop and return an exact `/aquarium:dev-setup-global` continuation request. Otherwise report its absence once and use the shared message format with the three required attribution trailers; history does not choose a conflicting format.
 
 When a handler handoff includes one or more promoted-evidence packages:
 
 - Resolve the evidence root from the applicable repository `AGENTS.md` Project Configuration or use `evidence/aquarium/` when none is declared. Require one unambiguous repository-relative tracked root; reject ignored, outside-repository, or symlinked roots and paths.
-- Require each manifest to use `aquarium.promoted-evidence/v1`, contain no runtime identity, match an approved purpose and work unit, bind the owning workflow's supplied verified native target SHA-256 and capture-time Git object ID, and list only staged regular non-symlink payloads beneath its package directory. Reject a missing, stale, or mismatched owning-workflow validation result and prohibited private content under the shared contract.
+- Require the manifest version supported by the shared evidence contract, no runtime identity, an approved purpose and work unit, and only staged regular non-symlink payloads beneath its package directory. For v1, bind the supplied native content SHA-256 and capture-time Git object ID. For v2, validate the shipped JSON Schema and require the identity to equal the retained public preflight target. Run [source_identity_digest.py](scripts/source_identity_digest.py) with that identity on stdin and match its digest to the manifest, preflight and receipt-bound run digest; derive consistency from scope under the shared contract. Require the owning workflow's current source-consistency observation and applicable staged Task content binding. v2 payload paths are package-relative and unique, and its directory must equal the staged manifest SHA-256. A metadata digest cannot prove unchanged source content. Reject a missing, stale, or mismatched owning-workflow validation result and prohibited private content under the shared contract.
 - Recompute every staged payload digest and the staged manifest digest. Require the supplied digest to use exactly one `sha256:` prefix and match the exact `manifest.json` bytes. Reject any path, byte, target, schema, content, or digest mismatch.
-- Reject any staged modification, replacement, move, or deletion of an existing tracked package. A changed package uses a new directory named by the verified native target digest.
+- Reject any staged modification, replacement, move, or deletion of an existing tracked package. A changed package uses a new directory named by the v1 native content digest or v2 manifest digest; preserve every previously committed package.
 - Add one repeatable `Aquarium-Evidence: <repository-relative-manifest-path> sha256:<64-hex-manifest-digest>` Lore trailer per unique package in supplied order.
 
-When the same handoff also includes a hardening deferral, reference `/use-mulgae` and use only read-only exact-run status and findings queries. Require committed publication, a successful findings query, exact membership of every supplied finding ID in the supplied run, and equality between the native reviewed target digest and the promoted manifest. Reject an unavailable run, mismatched or duplicate finding, uncertain query, or deferral metadata from any caller other than the owning epic-handler.
+When the same handoff also includes a hardening deferral, reference `/use-mulgae` and use only read-only exact-run inspection and receipt-bound findings queries for native reads. Require committed publication, a successful findings query, exact membership of every supplied finding ID in the supplied run, the same publication receipt throughout, and equality of the schema-specific native target binding with the promoted manifest. For v2, inspection supplies the publication's metadata digest; verify it against retained preflight and the locally recomputed identity digest, derive consistency from scope and require the current source-consistency observation. Inspection does not supply the full identity or consistency, and its digest is not a content hash. Reject an unavailable run, mismatched or duplicate finding, uncertain query, or deferral metadata from any caller other than the owning epic-handler.
 
 Never add new `Mulgae-Deferred-Run` or `Mulgae-Deferred-Finding` trailers. Do not copy finding descriptions, recommendations, severities, paths, reports, provider or model identities, runtime identities, or private native artifacts into the commit message. When the handoff explicitly says that no promoted evidence applies, add no `Aquarium-Evidence` trailer.
 
 Before committing in a Sanho-managed repository, reference `/use-sanho` and follow its commit-boundary workflow when available. If unavailable and required, stop and route the global skill gap to `/aquarium:dev-setup-global`; otherwise use the repository-required check or minimal `sanho status --json` fallback. Sanho status never grants commit authority.
 
+## Prepare the Commit Message
+
+Apply the shared attribution contract to the exact accepted candidate. Preserve the verified originating workflow, resolve the selected Task's parent Epic from the staged canonical roadmap, and show the complete subject, optional body, and single trailer block. Use `none` only for an established absence. A direct commit with no original Aquarium workflow records `aquarium:task-commit`.
+
+Before executing the commit, parse the prepared message with `git interpret-trailers --parse` and require exactly one of each expected `Aquarium-Workflow`, `Aquarium-Epic`, and `Aquarium-Task` value. Keep all required evidence and native provenance in the same final block. Reject an unparsed, duplicate, conflicting, or stale field before committing; never add a commit just to record attribution.
+
 ## Commit Through the Gate
 
-Bind the exact identity snapshot values to task-scoped `aquarium_commit_name` and `aquarium_commit_email` variables. Run exactly one direct commit with all author and committer environment overrides removed, all six Git identity keys pinned to the repository identity at command scope, and the hook marker scoped to that process:
+In a repository with a roadmap, bind the exact identity snapshot values to task-scoped `aquarium_commit_name` and `aquarium_commit_email` variables. Run exactly one direct commit with all author and committer environment overrides removed, all six Git identity keys pinned to the repository identity at command scope, and the hook marker scoped to that process:
 
 ```bash
 env \
@@ -111,12 +157,18 @@ env \
 
 The explicit `author.*` and `committer.*` pins prevent system, global, local, worktree, or conditional configuration from overriding the repository `user.*` snapshot. Do not pass `--author` or otherwise override the pinned author or committer identity. The marker signals only that this skill completed the checks above. Never export it globally, use it outside this skill, or treat it as authority. Do not amend or push without separate explicit authorization.
 
-After the commit and its hooks, compare a new commit's diff with the recorded staged diff byte-for-byte. For an amend, compare the replacement tree with the recorded full staged tree and the staged delta with the approved change. Read `%an%x00%ae%x00%cn%x00%ce` from the new commit and require both author and committer to match the identity snapshot exactly. Do not amend an identity mismatch automatically. Also verify the release-note decision and every expected promoted-evidence trailer and committed manifest/payload digest, inspect staged, unstaged, and untracked state for residue or hook changes, and refresh the applicable Sanho status.
+Without roadmap enrollment, create the one authorized commit using native Git and the repository's commit rules. Do not impose the roadmap gate's local-identity requirement, identity pins, or marker. Verify its actual author and committer against the previously resolved native identities.
+
+After the commit and its hooks, parse the actual committed message again and verify the expected subject and all three attribution values, permitting supported native provenance additions. A mismatch is an incomplete result with an existing commit; report it without automatically amending or creating another commit. Compare a new commit's diff with the recorded staged diff byte-for-byte. For an amend, compare the replacement tree with the recorded full staged tree and the staged delta with the approved change. Read `%an%x00%ae%x00%cn%x00%ce` from the new commit and require both author and committer to match the identity snapshot exactly. Do not amend an identity mismatch automatically. Also verify the release-note decision and every expected promoted-evidence trailer and committed manifest/payload digest, inspect staged, unstaged, and untracked state for residue or hook changes, and refresh the applicable Sanho status.
 
 For an amend, also verify that the replacement commit has the recorded parent, author, and message.
 
 Finish after the checks above when the current request is limited to a commit or amend. Choosing a commit method neither approves nor cancels later checks. Compare the user's current direction with prior authorization and the owning workflow's requirements. Run a previously approved check when its authority remains current; if the user limits the request to the commit, report the check as pending. A new commit SHA alone does not start a release or compatibility gate.
 
-Report the commit ID, task relationship, final roadmap state, release-note target and decision, committed paths, checks and evidence inherited from the owner, evidence trailer state when applicable, remaining worktree state, and publication gap.
+For a delegated commit, return to the current Aquarium caller after verifying the result. For an active Podway-backed workflow, echo the caller's session-relative continuation and include the observed session ID, revision and lifecycle as read-only continuation hints, not mutation fences. The caller re-observes before any finalization or remaining workflow mutation. A user-limited Podway-backed commit returns with finalization pending. Commit success alone does not establish managed-workflow completion or grant a Podway lifecycle mutation.
+
+Report the commit ID, verified workflow, Epic and Task attribution, task relationship, final roadmap state, release-note target and decision, committed paths, checks and evidence inherited from the owner, evidence trailer state when applicable, remaining worktree state, and publication gap.
 
 The bundled hook is a local guardrail, not complete enforcement: it detects direct shell `git commit` invocations in roadmap repositories, while indirect commits performed by other tools may not pass through that boundary.
+
+An adaptive caller includes its exact retained source/binding identity and mapped session-relative continuation from [adaptive execution](../../references/adaptive-execution.md). Preserve its distinct grants and return actual post-hook commit evidence. A recovered successful commit is evidence to verify, not authority to repeat it. Native finalization remains with the caller.

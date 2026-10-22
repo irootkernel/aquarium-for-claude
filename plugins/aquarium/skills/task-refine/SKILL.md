@@ -9,6 +9,10 @@ disable-model-invocation: true
 
 > **Claude Code delegation:** when this skill, or a reference or Procedure node it follows, hands a step to another Aquarium skill — however it phrases the hand-off, and whether it writes `/aquarium:<name>` or names the skill bare — read that skill's `SKILL.md` in full from this plugin (`../<name>/SKILL.md` from this skill's directory) and follow it as the delegated step instead of calling the Skill tool. Claude Code reserves most Aquarium skills for the user to type: it refuses the Skill tool for them and, once it has refused, forbids carrying out their workflow any other way. When you hand such a step to a subagent, put that file's absolute path in its assignment and have it read the file, because a subagent cannot load a gated skill through the Skill tool. Running another skill's bundled script is not a hand-off. A continuation request, routed repair, offer, or recommendation that the text has you return or report to the user is not a delegation: name its slash command, do not run it yourself, and stop where the text stops.
 
+Under an ordinary `task-handler`, follow [Task orchestration](../../references/task-orchestration.md). Return the node-specific `aquarium.executor-handoff/v3` with exact target, original requirements, actual results, available public handles, performed and omitted checks, authority and gaps. The Coordinator owns Podway records and Decisions; the independent Evaluator assesses coherent delivery phases. Admitted formal snapshots retain their original v1 contract. Direct invocation keeps this phase's existing authority.
+
+Read [commit-attribution.md](../../references/commit-attribution.md) for message formatting and change origins, within this skill's existing effect boundaries.
+
 Refine only the implementation-checked task-owned diff established by `/aquarium:task-handler`. When invoked directly, require the repository, roadmap path, task ID, current focused implementation-check evidence, and explicit authority for the staging steps below. Final requirement-mapped verification follows refinement.
 
 ## Deslop
@@ -40,4 +44,4 @@ Do not manufacture an edit when no safe, useful optimization exists. Record a no
 
 Do not broaden refinement into a general refactor. Re-run focused checks after every cleanup that touches executed code and broader gates after an optimization that changes code. After verification, stage only the confirmed task-owned optimization delta. For a no-op pass, keep the staged baseline unchanged and do not rerun gates solely because the pass made no change.
 
-Return deslop actions, optimization reasoning, staged baseline scope, optimization delta, commands and exit codes, and the final staged task-owned implementation and test paths to the orchestrator.
+Return deslop actions, optimization reasoning, staged baseline scope, optimization delta, commands and exit codes, and the final staged task-owned implementation and test paths to the coordinator.

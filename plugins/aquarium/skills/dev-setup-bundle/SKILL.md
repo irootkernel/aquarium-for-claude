@@ -1,6 +1,6 @@
 ---
 name: dev-setup-bundle
-description: "Apply Aquarium global and repository development setup across explicit Git repositories. Use when the user explicitly invokes /aquarium:dev-setup-bundle with an aquarium.dev-setup-bundle/v1 manifest path. Do not use for one repository or implicit workspace discovery."
+description: "Apply Aquarium global and repository development setup across explicit Git repositories. Use when the user explicitly invokes /aquarium:dev-setup-bundle with an aquarium.dev-setup-bundle/v2 manifest path. Do not use for one repository or implicit workspace discovery."
 argument-hint: "<manifest-path>"
 disable-model-invocation: true
 ---
@@ -8,6 +8,8 @@ disable-model-invocation: true
 # Development Setup Bundle
 
 > **Claude Code delegation:** when this skill, or a reference or Procedure node it follows, hands a step to another Aquarium skill — however it phrases the hand-off, and whether it writes `/aquarium:<name>` or names the skill bare — read that skill's `SKILL.md` in full from this plugin (`../<name>/SKILL.md` from this skill's directory) and follow it as the delegated step instead of calling the Skill tool. Claude Code reserves most Aquarium skills for the user to type: it refuses the Skill tool for them and, once it has refused, forbids carrying out their workflow any other way. When you hand such a step to a subagent, put that file's absolute path in its assignment and have it read the file, because a subagent cannot load a gated skill through the Skill tool. Running another skill's bundled script is not a hand-off. A continuation request, routed repair, offer, or recommendation that the text has you return or report to the user is not a delegation: name its slash command, do not run it yourself, and stop where the text stops.
+
+Read [commit-attribution.md](../../references/commit-attribution.md) for message formatting and change origins, within this skill's existing effect boundaries.
 
 Normalize one explicit external manifest, prepare its user-global components once through `/aquarium:dev-setup-global`, and configure repository components in target order through `/aquarium:dev-setup`.
 
@@ -18,27 +20,38 @@ Read [manifest.md](references/manifest.md), [the global setup skill](../dev-setu
 1. Require an explicit manifest path, Python 3.10 or newer, and PyYAML 6.x. Resolve this skill's directory and run `python3 <skill-directory>/scripts/normalize_manifest.py --manifest <path>`. Do not install dependencies or parse the manifest approximately.
 2. Never create, copy, edit, stage, or commit the manifest. Preserve its absolute path and SHA-256 only for this request.
 3. Inspect applicable instructions and worktree state for every ready target. Invalid targets remain isolated failures.
-4. Show the normalized digest, ordered targets, effective tools, local MCP overrides, guidance policy, and worktree state. Confirm this exact selection before its authorized network comparisons or Sorage diagnostic side effects. A refusal stops the bundle without mutation.
+4. Show the normalized digest, ordered targets, effective tools, target MCP scopes, Sorage slug and artist intent, guidance policy, and worktree state. Confirm this exact selection before its authorized network comparisons or Sorage diagnostic side effects. A refusal stops the bundle without mutation.
 5. Immediately before confirmation and before the first mutation or each later target, rerun normalization and require the original digest and target identities to match. A mismatch stops all remaining work and requires a fresh invocation.
 
-Confirmation authorizes only the global skill's documented bounded official metadata and raw-file reads plus disclosed non-network Sorage diagnostics outside Plan Mode. It never authorizes installation, replacement, initialization, repository mutation, Handoff access, staging, commit, or publication.
+Confirmation authorizes only the global skill's documented bounded official metadata and raw-file reads plus disclosed non-network Sorage diagnostics outside Plan Mode. An existing pre-Memo database requires the v0.1.2 backup and restore preflight before either inspector's confirmation flag; native migration reconfiguration remains a separate approved action. A missing database in a nonempty home, an incomplete or mismatched configuration, or an unverifiable state remains deferred for recovery. This authorization never includes installation, replacement, initialization, repository mutation, Handoff or Memo access, staging, commit, or publication.
 
 ## Prepare Global Components Once
 
-Pass the normalized `shared_tools` union, manifest digest, and requesting skill to `/aquarium:dev-setup-global`. The global skill maps each selected name to one `--component <name>` inspector argument and runs no other component, which preserves `aquarium.dev-setup-bundle/v1` and its existing vocabulary.
+Pass the normalized `shared_tools` union, `required_global_mcp` union, manifest digest, and requesting skill to `/aquarium:dev-setup-global`. The global skill maps each selected name to one `--component <name>` inspector argument and runs no other component.
 
-Prepare each selected global CLI, paired skill, global MCP registration, daemon, Sorage initialization, third-party writing or Lore skill, and Ouroboros component at most once. For Ouroboros, this means one CLI upgrade; its Claude Code integration is one plugin installation that global setup diagnoses rather than installs. Preserve every exact proposal, backup, approval, stale-target, verification, and cleanup boundary from `dev-setup-global`.
+Prepare each selected global CLI, paired skill, Sorage initialization, third-party writing or Lore skill, and Ouroboros component at most once. Prepare a Mulgae or Gaori global MCP only when that name is in `required_global_mcp`; local-only targets do not depend on global MCP readiness for that tool. For Ouroboros, this means one CLI upgrade; its Claude Code integration is one plugin installation that global setup diagnoses rather than installs. Preserve every exact proposal, backup, approval, stale-target, verification, and cleanup boundary from `dev-setup-global`.
 
 If a shared action fails or is declined, record the dependent targets as partial, failed, or declined while continuing independent components and targets.
 
 ## Configure Targets in Order
 
-For each ready target, after manifest revalidation and canonical identity freeze, pass the requesting skill, manifest digest, target index, canonical Git root, complete effective tool list, explicit local MCP overrides, and guidance policy to `/aquarium:dev-setup`. The repository skill interprets the list as target intent and never repeats global installation or freshness work.
+Carry `workflow-owner: aquarium:dev-setup-bundle` as orchestration context for each bundle-owned repository candidate. Preserve it in the delegated setup result and any later authorized commit, without adding fields to the manifest or native status documents.
 
-- Process only repository portions: workspace/configuration readiness, project MCP, Sorage Project binding and ignore state, Podway managed Procedures, and AGENTS.md/CLAUDE.md guidance.
+For a ready target with `agents_guidance: propose`, resolve its retained
+`path` to an absolute requested working directory, relative to the normalized
+manifest path's parent when needed. Before the guidance handoff, require that
+directory to still belong to the target's canonical Git root. If it is missing
+or resolves to a different root, report the mismatch and stop that target's
+guidance work; continue its independent selected components. Do not substitute
+the canonical root for the requested directory. Keep the canonical root as the target identity.
+
+For each ready target, after manifest revalidation and canonical identity freeze, pass the requesting skill, manifest digest, target index, canonical Git root, the separately resolved requested working directory when guidance is proposed, complete effective tool list, effective `global_mcp` and `local_mcp` lists, `sorage_project_slug`, `mulgae_artist`, and guidance policy to `/aquarium:dev-setup`. The repository skill interprets the list as target intent and never repeats global installation or freshness work.
+
+- Process only repository portions: workspace/configuration readiness, selected project MCP, Sorage Project binding and ignore state, Mulgae artist role, Podway managed Procedures, and root AGENTS.md guidance with migration of an existing root CLAUDE.md. Compare each requested MCP scope with the effective Claude Code registration; a configured registration at another scope is a mismatch. Diagnose and propose a bounded correction without deleting or replacing either registration silently. An MCP omitted from both lists is unrequested, not disabled; preserve any existing registration and do not claim its tools are hidden.
+- Compare an explicit Sorage slug with native Project resolution. A different binding is a mismatch requiring a separate bounded proposal; the slug grants no registration, rebind, unarchive, Handoff, Memo, or Vault authority. Compare the artist boolean with effective Mulgae roles. A mismatch requires an exact native configuration proposal under existing approval rules, without changing provider or model selection. Neither a configured registration nor a role config proves live exposure in this Claude Code session.
 - `agents_guidance: propose` requests the complete repository guidance proposal. `skip` suppresses that proposal. Effective Humanizer and im-not-ai selections still determine target-specific writing rules without repeating their global setup.
 - Ask only for identifiers or conflicts that repository evidence and the manifest cannot decide. Do not ask each target to select install, diagnose, or skip.
-- In Plan Mode, defer Sorage doctor and Project resolution because their native migration path may write local state. Outside Plan Mode, disclose the bounded side effect before running the selected target diagnosis.
+- In Plan Mode, defer Sorage doctor and Project resolution because their native paths may write local state. Outside Plan Mode, disclose the bounded side effect before selected diagnosis. A pre-Memo database requires the catalog's backup and restore preflight, explicit confirmation flag, separately approved migration reconfiguration, and a fresh inspection in that order. Defer a missing database in a nonempty home, an incomplete or mismatched configuration, or an unverifiable state for recovery.
 - Do not roll back successful actions, retry unchanged failures, stage, commit, push, invoke providers, start reviews or tests, or activate a Podway workflow.
 
 ## Report

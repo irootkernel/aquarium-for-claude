@@ -1,8 +1,8 @@
 # Repository Operating Guidance
 
-This reference is the `dev-setup` standard for root AGENTS.md and CLAUDE.md. General setup always reviews the complete instruction body against it and prepares a full reorganization where needed. Tool-limited requests and scoped continuations stay within their requested component and direct prerequisites. Honor explicit guidance exclusions, including `agents_guidance: skip`; diagnosis-only requests report findings without drafting a proposal.
+This reference is the `dev-setup` standard for root AGENTS.md guidance and migration of an existing root CLAUDE.md. General setup always reviews the complete instruction body against it and prepares a full reorganization where needed. Tool-limited requests and scoped continuations stay within their requested component and direct prerequisites. Honor explicit guidance exclusions, including `agents_guidance: skip`; diagnosis-only requests report findings without drafting a proposal.
 
-Aim for the standard's full structure and behavior while preserving project-specific meaning. Rewrite, regroup, and consolidate common guidance as needed. If the complete review establishes that the files already meet the standard, report no change; equivalent wording alone is not a reason to rewrite.
+Aim for the standard's full structure and behavior while preserving project-specific meaning. Rewrite, regroup, and consolidate common guidance as needed. If AGENTS.md already meets the standard and root CLAUDE.md is absent, report no guidance change; equivalent wording alone is not a reason to rewrite.
 
 The scope and root-cause principles incorporate guidance adapted from `multica-ai/andrej-karpathy-skills` commit `2c606141936f1eeef17fa3043a72095b4765b9c2`. Do not contact that repository or fetch its text while preparing a proposal. The seven-part core behavior below and this repository's instructions are the proposal authority.
 
@@ -25,6 +25,7 @@ Use this order for both new and existing files. Reorganize the complete body to 
 ### 2. Reuse Verified Information
 
 - Inspect the requested code and its named authorities before changing anything. Resolve discoverable facts before asking Master.
+- Before changing a feature, read applicable directory AGENTS.md files and the canonical documents relevant to the change. Respect the selected harness's native instruction scope and precedence.
 - Reuse established facts instead of reading or searching for them again. Recheck only the affected information when relevant state changes, evidence conflicts, or missing context makes it unreliable.
 - State material assumptions and surface meaningful trade-offs. Ask when unresolved ambiguity would materially change the result, and push back on conflicts with repository authority, safety, or Master's goal.
 
@@ -34,6 +35,7 @@ Use this order for both new and existing files. Reorganize the complete body to 
 - Weigh correctness, performance, maintainability, and structural fit rather than diff size alone. If a broader design exceeds scope, complete a bounded step that satisfies current acceptance criteria.
 - Reuse established patterns. Avoid speculative features, abstractions, configurability, compatibility layers, and handling for states repository invariants make impossible. Simplify complexity that the required behavior does not justify.
 - Touch only what the outcome and its verification require. Preserve unrelated user work, match local style, and remove only artifacts made obsolete by this change.
+- Read directory-guide adoption coverage in the root documentation index. Maintain affected canonical documents and existing applicable guides, including guides outside that coverage. Within adopted coverage, add guides for new feature boundaries as part of the authorized work. Report uncovered areas without unrelated backfill; guide absence alone adds no workflow blocker. Finish affected documentation before candidate review.
 - Record only independent remaining work in the canonical `deferred-feedback` owner. If none exists, propose the entry and obtain approval before creating an owner. Promote epic-sized work to a TODO candidate or roadmap unit; never defer current correctness or acceptance work.
 
 ### 4. Carry Authorization Forward
@@ -75,14 +77,24 @@ Use this order for both new and existing files. Reorganize the complete body to 
 
 ### Commit Messages
 
-<mandatory repository-specific commit header and subject rules>
+<shared commit format and attribution rules, plus approved repository-specific exceptions>
 
 ### Project-Specific Operating Rules
 
 <only verified repository-specific constraints and exceptions>
 ```
 
-Every applied AGENTS.md must contain all four top-level sections and all three `Project Configuration` subsections. Keep `Commit Messages` inside `Project Configuration`; never promote it to a separate top-level section or omit it because no rule was discovered.
+Every applied root AGENTS.md must contain all four top-level sections and all three `Project Configuration` subsections. Keep `Commit Messages` inside `Project Configuration`; never promote it to a separate top-level section or omit it because no rule was discovered.
+
+This structure applies to root guidance. Under the
+[directory agent guidance contract](../../../references/directory-agent-guidance.md),
+directory files contain local responsibilities, useful canonical-source links
+and necessary local instructions. Do not copy the full root template or create
+competing Project Configuration, evidence-root, release or commit declarations.
+`docs-setup` owns explicit nested-guide adoption and migration. Root setup alone
+does not declare coverage or run repository-wide feature discovery. Preserve
+existing local exceptions, other instruction formats and tool-managed blocks;
+keep root CLAUDE migration and loading-blocker checks below unchanged.
 
 ## Build the Project Configuration From Evidence
 
@@ -96,7 +108,9 @@ Keep the index compact and point to authorities rather than copying domain desig
 - generated or sensitive paths, evidence artifacts, unavailable gates, and destructive or externally mutating boundaries;
 - repository-specific tool routing, command IDs, version pins, timeouts, or approval rules.
 
-Do not insert placeholders, guessed commands, exhaustive file inventories, copied architecture prose, or facts inferred only from directory names. Omit optional facts that cannot be established. `Commit Messages` is the exception: if no authoritative header rule exists, ask the user to choose one and do not finalize or apply the proposal until it is resolved.
+Do not insert placeholders, guessed commands, exhaustive file inventories, copied architecture prose, or facts inferred only from directory names. Omit optional facts that cannot be established. Use [commit-attribution.md](../../../references/commit-attribution.md) for the common commit format and origin rules. Propose its eight purpose headers, exact release title, and three required attribution trailers when no local rule exists. A conflicting established rule requires an explicit migration or exception decision before applying guidance; recent history cannot choose the rule. Once the user has selected the common format, carry that choice into the exact proposal without asking again. Preserve native IDs and tool-generated message exceptions.
+
+Include the common message rules in `Project Configuration > Commit Messages`: an English imperative subject with one approved header, one final trailer block, exactly one `Aquarium-Workflow`, `Aquarium-Epic`, and `Aquarium-Task`, verified `none` values, resolution of a Task's canonical parent Epic, and preservation of the original skill through later commits. Lore context remains optional; native provenance and explicit personal-attribution restrictions remain intact. The change origin belongs in the workflow report or handoff, outside native status-record schemas.
 
 ## Add Aquarium References Without Copying Manuals
 
@@ -105,11 +119,11 @@ Adapt names only when the installed skill namespace differs. Include only refere
 - Use `/aquarium:task-handler` for one named roadmap task.
 - Use `/aquarium:epic-handler` to implement one roadmap epic as sequential task goals.
 - Use `/aquarium:epic-validator` to cold-validate and remediate one completed roadmap epic.
-- Use `/aquarium:new-project`, `/aquarium:new-feature`, or `/aquarium:refactor` for an explicitly requested Ouroboros-assisted project or epic design workflow.
-- Use `/aquarium:war-room` to diagnose one difficult bug and stop at a task, epic, or incomplete-investigation proposal.
-- Use `/aquarium:dev-setup-global` to diagnose, install, or update supported user-global development tools, paired skills, services, and global MCP state. Requests to install or update only the Aquarium plugin belong to Claude Code's own plugin management; do not load this skill or run global setup diagnostics for those requests.
+- Use `/aquarium:new-project`, `/aquarium:new-feature`, or `/aquarium:refactor` for an explicitly requested Ouroboros-assisted project or epic design workflow. When an ordinary feature Epic needs a dossier or semantic clarification before execution, `/aquarium:epic-handler` may continue through `/aquarium:new-feature` in the same conversation. Design approvals still apply.
+- Use `/aquarium:war-room` to diagnose one difficult bug and stop at a task, epic, incomplete-investigation proposal, or evidence-backed no-work outcome.
+- Use `/aquarium:dev-setup-global` to diagnose, install, or update supported user-global development tools, paired skills, services, and global MCP state. Requests to install or update only the Aquarium plugin belong to the host's plugin-management flow; do not load this skill or run global setup diagnostics for those requests.
 - Use `/aquarium:dev-setup` to diagnose or configure repository-local tooling and operating guidance, including explicitly requested Sorage Project setup.
-- Use `/aquarium:docs-setup` to audit, establish, adopt, or migrate canonical documentation structure and roadmap IDs.
+- Use `/aquarium:docs-setup` to audit, establish, adopt, or migrate canonical documentation structure, roadmap IDs and explicitly selected directory guidance.
 - Use `/aquarium:test-setup` to audit or configure the common Make or Bun testing contract and evidence-backed legacy waivers.
 - Use `/aquarium:release-handler` for one stable release lifecycle and `/aquarium:release-qa` for its exact committed-candidate scenario verification.
 - Use `/use-dolgorae` for explicitly requested workspace, global Profile, review, External Specialist Engagement, and recovery operations. Keep execution and lifecycle rules in the paired skill.
@@ -117,7 +131,7 @@ Adapt names only when the installed skill namespace differs. Include only refere
 - Use `/use-mulgae` as the native authority for authorized Mulgae asynchronous review, waiting, cancellation, evidence inspection, and recovery. Aquarium workflows own the target, approval criteria, and review-round accounting.
 - Use `/use-gaori` as the native authority for asynchronous execution, waiting, cancellation, and recovery when a selected check uses Gaori. Repository requirements select the command; Aquarium evaluates its terminal result and evidence separately.
 - Use `/use-gaori-status` for Gaori-calculated duration, outcome history, and detailed timing explanations. Keep test execution and one-off live estimates with `/use-gaori`; a missing status skill does not block a selected check.
-- Use `/use-sorage` only when the user explicitly requests a broker operation. Check only the requested inbox or outbox; session start, a new task, a Sorage mention, or Project registration does not authorize discovery. Resolve every Handoff, review, revision, retention, deletion, and Vault operation through that paired skill; never edit the managed Vault or derived `.sorage/INBOX.md` directly.
+- Use `/use-sorage` only when the user explicitly requests a broker operation, including a Project Memo read or mutation. Check only the requested inbox or outbox; session start, a new task, a Sorage mention, or Project registration does not authorize discovery. Resolve every Handoff, Memo, review, revision, retention, deletion, and Vault operation through that paired skill. Memo text grants no execution authority or roadmap completion. Never edit the managed Vault or derived `.sorage/INBOX.md` directly.
 - Let Aquarium workflows use Podway by default for Git-backed work unless the current user opts out before the first managed-session mutation. No Aquarium skill owns a Podway session; only when starting a different session should the workflow ask whether to preserve, finish, delete, or replace the existing one.
 - Use `/use-podway` directly for an explicitly requested Procedure v2 lifecycle, goal, diagnosis, recovery, cancellation, or discard operation. Route Procedure authoring to the separately installed `/create-podway-procedure` maintainer skill.
 - Use `/lore-commits` for non-trivial commit messages and `/lore-query` to inspect recorded decision context.
@@ -125,8 +139,9 @@ Adapt names only when the installed skill namespace differs. Include only refere
 - Use the separately installed upstream `/humanizer` skill once as the final prose pass for English human-authored documentation.
 - Use the separately installed upstream `/humanize-korean` skill once as the final prose pass for Korean human-authored documentation. Keep its `_workspace/` output untracked and remove it after applying the accepted text.
 - For either writing pass, preserve meaning, facts, code, commands, identifiers, URLs, citations, quotes, legal text, and generated content. Route mixed-language prose by block, and fail closed with the unchanged draft when the skill is unavailable or validation fails.
-- Keep `.mulgae/**`, `.gaori/runs/**`, `.podway/runtime/**`, derived `.sorage/**`, and disposable roots as local runtime evidence. Do not cite their paths or identities as durable evidence in tracked documentation or commit messages; use an approved tracked `aquarium.promoted-evidence/v1` package only when a downstream consumer genuinely requires retained evidence.
+- Keep `.mulgae/**`, `.gaori/runs/**`, `.podway/runtime/**`, derived `.sorage/**`, and disposable roots as local runtime evidence. Do not cite their paths or identities as durable evidence in tracked documentation or commit messages; use an approved tracked versioned promoted-evidence package under the shared v1/v2 contract only when a downstream consumer genuinely requires retained evidence.
   Declare at most one custom root with the exact Project Configuration entry `Aquarium evidence root: <repository-relative-path>`; otherwise use `evidence/aquarium/`. Promotion accepts only reviewed bounded non-sensitive structured evidence and never accepted reports, raw logs, excerpts, provider prose, runtime identities, or machine-specific paths.
+- Preserve released managed Procedure copies and adopted repository customizations. Qualified adaptive execution retains exact ignored source/binding bundles under approved roots; optional reusable definitions and historical local material are not automatically workflow policy. Automatic preparation/adoption within the existing envelope grants no managed-copy update or installation. Post-use tracked preservation needs specific content consent after original finalization and a matching separate grant for its commit. Keep this distinction in stricter repository guidance without weakening protected-host rules.
 - Repository-specific rules in `Project Configuration` override these defaults.
 
 When `/aquarium:release-handler` is selected, inspect established changelog and release-note authorities. Preserve one existing unambiguous owner and propose the exact Project Configuration entry `Aquarium release notes: <repository-relative-path>`. When no owner exists, ask before proposing a new root `CHANGELOG.md`; never infer enrollment from a filename, create release history from commit subjects alone, or replace an established changelog. Keep the selected path regular, non-symlinked, tracked, and inside the repository.
@@ -145,39 +160,26 @@ Classify existing AGENTS.md and substantive CLAUDE.md text as:
 
 Use this classification to rebuild the instruction body around the required hierarchy. Rewrite common guidance to express the seven core behaviors, merge duplicates without weakening them, and place project-specific rules under `Project Configuration`. Preserve the meaning of user-authored rules and applicable stricter constraints; ask only about actual semantic conflicts. Preserve unrelated content and tool-managed blocks, including their markers. Do not add generated markers or rewrite equivalent wording solely to match the template byte-for-byte.
 
-AGENTS.md is the canonical instruction body. Handle root CLAUDE.md as follows:
+AGENTS.md is the sole repository-managed root instruction file. Handle root CLAUDE.md as follows:
 
-- If absent, propose the delegation file below.
-- If it already contains an equivalent `@AGENTS.md` import and precedence statement, leave it unchanged.
-- If it delegates in prose only, propose replacing that prose with the delegation file: a prose reference is followed at the model's discretion, while the import is loaded before the first turn.
-- If it contains substantive guidance, merge every non-duplicate or stricter rule into AGENTS.md, resolve conflicts with the user, then propose replacing CLAUDE.md with the delegation file.
-- Never replace substantive CLAUDE.md until its retained guidance is visible in the same complete proposal.
+- If absent, leave it absent. Never create a delegation file, import, or symlink.
+- If it only delegates to or imports AGENTS.md, or is a symlink to AGENTS.md, propose removing it only when no other loading blocker remains. For a symlink, remove only the link, not its target.
+- If it contains substantive guidance, merge every non-duplicate or stricter rule into AGENTS.md and resolve conflicts with the user before proposing its removal, subject to the same blocker check. Keep any content whose disposition is unresolved until the user decides where it belongs.
+- Never remove substantive CLAUDE.md until its retained guidance is visible in the same complete proposal.
 
-```markdown
-# CLAUDE.md
-
-This repository uses `AGENTS.md` as the canonical agent instruction file.
-
-@AGENTS.md
-
-Claude Code resolves the line above as a real import, so the canonical guidance is already loaded. If any guidance in this file conflicts with `AGENTS.md`, `AGENTS.md` wins.
-```
-
-The `@AGENTS.md` line is Claude Code's file-import syntax. Keep it on its own line and outside every code fence; an `@AGENTS.md` inside a fenced block is documentation, not an import. The import inlines the whole of `AGENTS.md` into every Claude Code session's context, so disclose that in the proposal.
-
-Do not edit nested AGENTS.md, nested CLAUDE.md, or other agent instruction formats by default.
+Claude Code directly reads AGENTS.md on v2.1.277 or later, although some sessions before v2.1.281 cannot do so. Under the default project-instructions setting, a CLAUDE.md, CLAUDE.local.md, or .claude/CLAUDE.md in the working directory or an ancestor takes precedence. Starting at the requested working directory (or current working directory when omitted), check each directory through the Git root and its ancestors. Read the root CLAUDE.md for migration; check only the existence of the other blocking files. If any blocker would remain after root CLAUDE.md removal, report its path and withhold that removal proposal without changing the blocker. Do not report guidance ready while a blocker remains. User-global ~/.claude/CLAUDE.md does not block project AGENTS.md. A custom project-instructions setting remains a manual verification concern. Do not edit nested AGENTS.md, nested CLAUDE.md, or other agent instruction formats by default. See [Claude Code project memory](https://code.claude.com/docs/en/memory).
 
 ## Diagnose, Propose, and Apply
 
-Report the complete review's findings: standard structure and behavior coverage, missing commit-message authority, duplicated or conflicting guidance, CLAUDE.md delegation state including whether it delegates through a real `@AGENTS.md` import or in prose only, and the evidence for project indexing. An explicit diagnosis-only request stops after this report. Otherwise, when reorganization is needed:
+Report the complete review's findings: standard structure and behavior coverage, missing commit-message authority, duplicated or conflicting guidance, root CLAUDE.md migration state, any loading blocker on the checked path, and the evidence for project indexing. An explicit diagnosis-only request stops after this report. Otherwise, when reorganization or migration is needed:
 
-1. Record the exact root AGENTS.md and CLAUDE.md paths and their current bytes, object hashes, or explicit absence.
+1. Record the exact root AGENTS.md and CLAUDE.md paths and their current bytes, object hashes, link target, or explicit absence as applicable.
 2. Resolve every conflict and the mandatory commit-message rule before presenting an applicable proposal.
-3. Show one complete combined diff for both files, labeling retained repository rules through their final placement.
+3. Show one complete AGENTS.md diff and, only when no other loading blocker remains, the removal of the existing root CLAUDE.md. Label retained repository rules through their final placement.
 4. Explain ambiguous text left unchanged and every fact omitted for lack of authority.
 5. Use existing authorization when it covers the exact displayed diff; otherwise ask for approval once. The user may request revision or decline it.
-6. Immediately before writing, re-read both targets and require them to match the snapshots used for the proposal. A change to either target invalidates approval for the combined diff.
-7. Apply only the approved diff, then show the actual diff and verify the required structure, mandatory commit-message subsection, CLAUDE.md delegation including its `@AGENTS.md` import, retained overrides, and unrelated content.
+6. Immediately before writing, re-read both targets and require them to match the snapshots used for the proposal. A change to either target invalidates approval for the combined diff. Recheck Claude loading-blocker existence from the preserved requested working directory through the Git root and its ancestors. If the approved diff removes root CLAUDE.md and another blocker would remain after that removal, invalidate approval for the combined diff, write neither target, preserve root CLAUDE.md, and keep guidance unready. If the approved diff changes only AGENTS.md, apply it under its existing approval even when a blocker remains; report the blocker and keep guidance unready. Continue independent setup components.
+7. Apply only the approved diff, then show the actual diff and verify the required structure, mandatory commit-message subsection, retained overrides, and unrelated content. Verify root CLAUDE.md is absent when its removal was approved; otherwise verify that the deferred file remains and report the blocker.
 
 Proposal approval covers only the exact displayed root instruction-file diff. It does not authorize nested-file edits, tool setup, staging, committing, or publication.
 
@@ -188,9 +190,15 @@ These scenarios describe expected outcomes for Master's separate verification of
 | Scenario | Expected behavior |
 | --- | --- |
 | General setup with fragmented or repetitive guidance | Review the complete body and propose one combined diff that reorganizes it around the standard, even when tool configuration is healthy. |
+| New repository without root guidance | Propose AGENTS.md only; leave CLAUDE.md absent. |
 | Guidance already meets the standard | Finish the full review and report no change; do not rewrite equivalent wording. |
 | Project-specific constraints or tool-managed blocks | Preserve their meaning and managed content; ask only about actual semantic conflicts. |
-| Substantive CLAUDE.md | Retain every non-duplicate or stricter rule in the combined proposal before replacing it with delegation. |
+| Existing delegation or import in root CLAUDE.md | Propose removing the file when no other loading blocker remains; never recreate it. |
+| Substantive root CLAUDE.md | Retain every non-duplicate or stricter rule in AGENTS.md before proposing removal; resolve conflicts first. |
+| Another loading blocker on the requested-directory-to-ancestor path | Report its path, retain root CLAUDE.md, leave the blocker untouched, and keep guidance unready. |
+| Loading blocker appears after approval of root CLAUDE.md removal | Recheck before writing, invalidate the combined approval, preserve root CLAUDE.md, and keep guidance unready. |
+| Existing blocker with an approved AGENTS.md-only diff | Apply the unchanged approved diff, retain root CLAUDE.md, report the blocker, and keep guidance unready. |
+| Bundle target names a nested directory | Check loading blockers from that directory through its ancestors, even though the canonical root remains the target identity. |
 | Tool-limited request, scoped continuation, or guidance `skip` | Keep the requested scope without adding a whole-file guidance proposal. |
 | Diagnosis-only request | Report the review findings without drafting or applying a proposal. |
 | Approved proposal or changed target snapshot | Reuse approval for the unchanged diff; if either target changes, invalidate the combined approval and prepare a current proposal. |

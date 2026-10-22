@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import ast
 import filecmp
-import fnmatch
 import hashlib
 import json
 import re
@@ -34,7 +33,17 @@ CODEX_EXEMPTIONS = OVERRIDES / "codex-exemptions.json"
 ADDITIONS = REPOSITORY / "additions"
 SYNC_MANIFEST = "sync-manifest.json"
 
-COPIED_DIRECTORIES = ("skills", "references", "assets", "hooks")
+# `shared/` arrived in v0.1.20: the adaptive-procedure helpers every Podway-backed
+# workflow and `inspect_tools.py` load from the plugin root. They carry no host
+# text, and without them the selected-Procedure inspection reports a missing
+# prerequisite forever.
+COPIED_DIRECTORIES = ("skills", "references", "assets", "hooks", "shared")
+# Copied data other shipped files pin by digest: v0.1.20's adaptive known
+# sources record the SHA-256 of every bundled Podway Procedure, and its
+# capability signatures and operation contracts pin canonical JSON of their node
+# definitions. No rule may rewrite them, even by an accidental match; they are
+# still scanned. The Procedures themselves are `.yaml`, which nothing rewrites.
+VERBATIM_DIRECTORIES: tuple[str, ...] = ("assets/adaptive", "assets/schemas")
 TEXT_SUFFIXES = (".md",)
 SCRIPT_SUFFIXES = (".py",)
 DATA_SUFFIXES = (".json",)
@@ -50,8 +59,9 @@ SCANNED_SUFFIXES = TEXT_SUFFIXES + SCRIPT_SUFFIXES + DATA_SUFFIXES + (".yaml",)
 # gate against, so additions pass through every check that scans copied text.
 ADDED_PATHS: tuple[str, ...] = (
     # A plugin subagent Claude Code discovers from the plugin-root `agents/`
-    # directory: the read-only Opus reviewer `independent-review` dispatches.
-    "agents/independent-reviewer.md",
+    # directory: the read-only Opus reviewer `subagent-review` dispatches for
+    # every member of its review team.
+    "agents/subagent-reviewer.md",
     # The edition-owned upgrade lifecycle. Additions land after
     # `transform_skills`, so this skill never sees the sidecar-derived
     # decoration or the delegation note: its frontmatter — the gating flag
@@ -59,11 +69,13 @@ ADDED_PATHS: tuple[str, ...] = (
     # addition that omits it.
     "skills/upgrade/SKILL.md",
     "skills/upgrade/references/rederivation.md",
-    # The repository-state inspector this edition's independent review runs for
-    # its no-mutation baseline. Upstream shipped it beside `orca-review` and
-    # removed it in v0.1.14; the edition owns it now, under the skill that
-    # actually calls it, which also retires the cross-skill path nothing watched.
-    "skills/independent-review/scripts/inspect_repository_state.py",
+    # The repository-state inspector this edition's Subagent Review runs for its
+    # no-mutation baseline. Upstream shipped it beside `orca-review` and removed
+    # it in v0.1.14; the edition owns it under the skill that calls it, and it
+    # moved with that skill when v0.1.20 renamed `independent-review` to
+    # `subagent-review` without an alias. Upstream's own target inspector checks
+    # only the target, not the refs, index, and worktree this one compares.
+    "skills/subagent-review/scripts/inspect_repository_state.py",
 )
 
 # Slash-menu hints for the skills that take arguments. Claude Code shows the
@@ -86,9 +98,9 @@ ARGUMENT_HINTS: dict[str, str] = {
     "release-handler": "[version]",
     "release-qa": "[version]",
     "dev-setup-bundle": "<manifest-path>",
-    "independent-review": "<target> [task-or-epic-id]",
+    "subagent-review": "<target> [task-or-epic-id] [model] [effort]",
+    "herdr-review": "<target> <reviewer> [task-or-epic-id]",
     "mulgae-review": "<target> [task-or-epic-id]",
-    "orca-review": "<target> [task-or-epic-id]",
 }
 
 # Upstream skills hand work to each other by name: `task-handler` loads its
@@ -137,11 +149,19 @@ EXCLUDED_FILES: tuple[tuple[str, str], ...] = (
     (
         "references/dolgorae-review-contract.md",
         "the consumer contract for the Dolgorae capture backend upstream adopted in "
-        "v0.1.14; that backend runs a fresh Codex Reviewer, this artifact's "
-        "independent review dispatches host subagents instead, and its Orca review "
-        "is forbidden to use Dolgorae, so no skill here routes through it and the "
-        "contract would document a lifecycle this edition does not have; upstream "
-        "disabled that route in v0.1.16 and this edition's route never used it",
+        "v0.1.14; that backend runs a fresh reviewer of the other host, and this "
+        "edition's review never routed through it. Upstream disabled the route in "
+        "v0.1.16 and since v0.1.18 keeps the contract only as dormant material for "
+        "a separately named future route, so no shipped route consumes it and it "
+        "would document a lifecycle this edition does not have",
+    ),
+    (
+        "references/production-status.md",
+        "the production-setup ledger specification v0.1.18 moved into the plugin "
+        "from upstream's repository-level `docs/specs/`; it specifies the record "
+        "envelopes of the `aquarium-status` runtime under the excluded plugin-root "
+        "`tools/`, and the `status` skill that reports them is excluded whole, so "
+        "it would document a lifecycle this edition does not have",
     ),
     (
         "references/development-contract.md",
@@ -173,8 +193,8 @@ EXCLUDED_SKILLS: tuple[tuple[str, str], ...] = (
         "`aquarium-status` inspection, `aquarium-status show`, and `forget` — runs the "
         "ledger runtime under the excluded plugin-root `tools/`, it reports enrollment "
         "in the `aquarium-dev` channel this edition does not ship, and its record "
-        "envelopes are specified only in upstream's repository-level `docs/specs/`, "
-        "outside the plugin; the ledger lifecycle upstream wired into `dev-setup` and "
+        "envelopes are specified in `references/production-status.md`, which is "
+        "excluded with it; the ledger lifecycle upstream wired into `dev-setup` and "
         "`dev-setup-bundle` is removed with it",
     ),
 )
@@ -199,10 +219,12 @@ EXCLUDED_PLUGIN_ROOT: tuple[tuple[str, str], ...] = (
     ),
     (
         ".mcp.json",
-        "the plugin-level registration for that development channel, in Codex's "
-        "`mcp_servers` shape with `cwd` and `tool_timeout_sec`; the channel is excluded, "
-        "and a translated registration would start a server no installation provides and "
-        "report a failed MCP connection in every session of every repository",
+        "the plugin-level registration for that development channel. v0.1.18 moved it "
+        "to the `mcpServers` shape Claude Code also reads, but its only server still "
+        "launches `./tools/aquarium-dev/mcp-launcher` from the excluded `tools/` with "
+        "`cwd` and `tool_timeout_sec`; the channel is excluded, and a copied "
+        "registration would start a server no installation provides and report a "
+        "failed MCP connection in every session of every repository",
     ),
 )
 
@@ -219,33 +241,31 @@ EXCLUDED_PLUGIN_ROOT: tuple[tuple[str, str], ...] = (
 #
 # `AGENTS.md` is deliberately absent. Upstream `dev-setup/SKILL.md` contains
 # "Do not edit nested AGENTS.md, CLAUDE.md, ...", which a blanket rule would
-# corrupt into "nested CLAUDE.md, CLAUDE.md". Instruction-file wording is
-# handled by full-file overrides instead.
+# corrupt into "nested CLAUDE.md, CLAUDE.md". Instruction-file wording ships as
+# upstream writes it: since v0.1.18 it makes `AGENTS.md` the sole root guidance,
+# which Claude Code 2.1.277 or later reads natively, and checks the CLAUDE.md
+# files that would stop it from loading.
 SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
-    # Upstream v0.1.16 disabled its Dolgorae-backed Independent Review and this
-    # sentence now says so directly. This edition keeps Independent Review live
-    # on host subagents, but that backend holds no immutable capture either, so
-    # it is still not a fallback for the two capture-only scopes; the
-    # replacement keeps the exclusion and says why in this edition's own terms.
+    # Upstream v0.1.18 links the dormant Dolgorae consumer contract this edition
+    # excludes; the reference would dangle, and the review route needs nothing
+    # from it.
     (
-        "`workspace` and `dirty` remain outside this workflow. Report the unsupported Orca scope and ask for an explicitly selected supported target or review route; Independent Review is disabled and is not a fallback. Never stage paths or reinterpret state merely to manufacture an Orca Review target.",
-        "`workspace` and `dirty` remain outside this workflow. Report the unsupported Orca scope and ask for an explicitly selected supported target or review route; Independent Review does not support those scopes either and is not a fallback. Never stage paths or reinterpret state merely to manufacture an Orca Review target.",
+        " The dormant [Dolgorae consumer contract](dolgorae-review-contract.md) is future material for a separately named route.",
+        "",
     ),
-    # The shared disposition contract lists every route that can still deliver
-    # findings now that upstream v0.1.16 disabled its Dolgorae-backed
-    # Independent Review, and it routes a caller to an explicitly selected
-    # "native Codex" (host-native) subagent instead. On this host Independent
-    # Review IS that native subagent route and stays enabled, so the contract
-    # names it directly rather than describing it as disabled or dormant. The
-    # first anchor still holds unsubstituted `$aquarium:` sigils, so this pair
-    # must run before the `$aquarium:` rule.
+    # Since v0.1.16 the proportional `change` rule binds this edition's subagent
+    # route too: its bundled reviewer carries the same limits. Upstream v0.1.19
+    # scoped the sentence to Herdr alone when Herdr Review replaced Orca.
+    ("A Herdr `change` review starts", "A Herdr or Subagent Review `change` review starts"),
+    # The Herdr route prefers another AI family's judgment; upstream names both
+    # hosts in one symmetric sentence, which reads host-neutrally once the
+    # preference is stated against the Coordinator.
+    ("Prefer Codex to Claude or Claude to Codex.", "Prefer a reviewer kind outside the Coordinator's AI family."),
+    # Upstream qualified Herdr Review against each reviewer kind it launches.
     (
-        "The disabled `$aquarium:independent-review` route itself only reports its refusal and alternative guidance; that refusal launches nothing. Exactly one explicitly preselected supported Orca or native Codex alternative may run only under its own contract, and native Codex additionally requires host fresh delegation. Multiple preselected alternatives require the user to choose one before anything launches. A direct `$aquarium:task-review`, standalone `$aquarium:mulgae-review`, or standalone `$aquarium:orca-review` is report-only.",
-        "A standalone `/aquarium:independent-review` dispatches fresh read-only reviewer subagents through this host's own subagent mechanism under its own contract. A direct `/aquarium:task-review` or a standalone `/aquarium:independent-review`, `/aquarium:mulgae-review`, or `/aquarium:orca-review` is report-only.",
-    ),
-    (
-        "from Mulgae Review, Orca Review, an explicitly selected native Codex review subagent, a workflow review waiver, or the dormant Independent Review contract if that route is re-enabled.",
-        "from Mulgae Review, Orca Review, Independent Review, an explicitly selected native Claude Code review subagent, or a workflow review waiver.",
+        "Qualification requires actual Codex/Claude target, output, failure/recovery and\n"
+        "embedded-workflow observations, plus manual skill verification.",
+        "Qualification requires actual target, output, failure/recovery and embedded-workflow observations for each reviewer agent kind it supports, plus manual skill verification.",
     ),
     # Upstream v0.1.17 wired its production-setup ledger into `dev-setup` and
     # `dev-setup-bundle`: a gate that blocks every repository mutation until the
@@ -278,6 +298,12 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "\n",
         "",
     ),
+    # The ledger's `## Record Terminal Setup` section (dev-setup/SKILL.md,
+    # shipped count 1), re-derived against v0.1.21; v0.1.18 added the recorder's
+    # language-scan paragraph and moved the specification
+    # link to the plugin's own `references/production-status.md`, which is now
+    # excluded too. The section records into the excluded ledger runtime, so it
+    # goes whole. No `$` sigil in the anchor; keep it in the ledger block.
     (
         "## Record Terminal Setup\n"
         "\n"
@@ -291,6 +317,12 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "<plugin-root>/tools/aquarium-status record` with the closed document on standard\n"
         "input; do not import a cache path into the current agent process.\n"
         "\n"
+        "The recorder observes Go, Rust, Python, TypeScript, and Dart declarations from\n"
+        "the target repository during a new accepted record. Its v2 receipt reports\n"
+        "`language_status` separately. An unavailable language scan preserves any\n"
+        "previous observation and does not turn a successful setup record into a failed\n"
+        "recording. An exact record replay does not repeat the scan.\n"
+        "\n"
         "Return `aquarium-production-status-recording-result/v1` with exactly `schema`,\n"
         "`status`, `attempt_id`, `receipt`, `retry_request`, and `problem_code`. Preserve\n"
         "setup success if recording fails: return `failed`, the exact original record\n"
@@ -299,20 +331,50 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "must not re-enter or repeat setup. If canonical identity was unavailable, return\n"
         "`not_recordable` with a null attempt ID and do not write a row. Use the exact\n"
         "fields, nullability rules, and closed problem codes in the\n"
-        "[production-status specification](../../../../docs/specs/production-status.md).\n"
+        "[production-status specification](../../references/production-status.md).\n"
         "\n",
         "",
     ),
-    ("status-recording result or exact record-only retry, ", ""),
+    # New (dev-setup/SKILL.md, shipped count 1). v0.1.19's Herdr paragraph speaks
+    # the ledger's vocabulary — terminal attempts, recorder components — except
+    # its last sentence, which is kept. It follows the rule anchored "Before
+    # preparing any terminal attempt", which deletes the preceding attempt
+    # paragraphs; the anchors do not overlap.
     (
-        "Pass the normalized `shared_tools` union, manifest digest, requesting skill, and\n"
+        "Herdr readiness diagnosis creates no terminal attempt. For an approved migration\n"
+        "write, record managed Procedure changes under `podway` and root guidance changes\n"
+        "under `agents-guidance`, combining those components when both are selected.\n"
+        "Do not invent a `herdr` component in the recorder's closed vocabulary. Native\n"
+        "Herdr host setup and successor session lifecycle remain with their upstream tool\n"
+        "and owning workflow handler.\n",
+        "Native Herdr host setup and successor session lifecycle remain with their upstream tool and owning workflow handler.\n",
+    ),
+    ("status-recording result or exact record-only retry, ", ""),
+    # The bundle's handoff to the global skill (dev-setup-bundle/SKILL.md,
+    # shipped count 1), re-derived against v0.1.21; v0.1.18's v2 bundle manifest
+    # added the `required_global_mcp` union and dropped the v1 manifest
+    # clause. The anchor carries a `$aquarium:` sigil: run before that rule.
+    (
+        "Pass the normalized `shared_tools` union, `required_global_mcp` union, manifest digest, requesting skill, and\n"
         "the infrastructure component `aquarium-status` to `$aquarium:dev-setup-global`.\n"
         "The global skill maps each selected name to one `--component <name>` inspector\n"
         "argument and runs no other component. `aquarium-status` is common bundle\n"
-        "infrastructure, not a new manifest tool, so this preserves\n"
-        "`aquarium.dev-setup-bundle/v1` and its existing vocabulary.\n",
-        "Pass the normalized `shared_tools` union, manifest digest, and requesting skill to `/aquarium:dev-setup-global`. The global skill maps each selected name to one `--component <name>` inspector argument and runs no other component, which preserves `aquarium.dev-setup-bundle/v1` and its existing vocabulary.\n",
+        "infrastructure, not a new manifest tool.\n",
+        "Pass the normalized `shared_tools` union, `required_global_mcp` union, manifest digest, and requesting skill to `/aquarium:dev-setup-global`. The global skill maps each selected name to one `--component <name>` inspector argument and runs no other component.\n",
     ),
+    # New (dev-setup-bundle/SKILL.md, shipped count 1). The canonical root stays
+    # the target identity; there is no status-recording root without the ledger.
+    (
+        "Keep the canonical root as the\n"
+        "target identity and status-recording root.",
+        "Keep the canonical root as the target identity.",
+    ),
+    # The bundle's per-target attempt and handoff (dev-setup-bundle/SKILL.md,
+    # shipped count 1), re-derived against v0.1.21; v0.1.18 moved the
+    # specification link into the plugin and extended the
+    # handoff with the requested working directory, `global_mcp`/`local_mcp`,
+    # `sorage_project_slug`, and `mulgae_artist`, all kept. The anchor carries a
+    # `$aquarium:` sigil: run before that rule.
     (
         "For each ready target, after manifest revalidation and canonical identity freeze,\n"
         "read its current row through `aquarium-status show --format json` and create one\n"
@@ -324,19 +386,27 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "when the effective guidance policy is `propose`. A bundle target is never a\n"
         "full attempt, because the manifest is an explicit component selection; this\n"
         "prevents it from advancing `last_full_ready`. The\n"
-        "[production-status specification](../../../../docs/specs/production-status.md)\n"
+        "[production-status specification](../../references/production-status.md)\n"
         "owns this closed envelope. Pass it with the requesting\n"
-        "skill, manifest digest, target index, canonical Git root, complete effective tool\n"
-        "list, explicit local MCP overrides, and guidance policy to `$aquarium:dev-setup`.\n"
+        "skill, manifest digest, target index, canonical Git root, the separately resolved\n"
+        "requested working directory when guidance is proposed, complete effective tool\n"
+        "list, effective `global_mcp` and `local_mcp` lists, `sorage_project_slug`,\n"
+        "`mulgae_artist`, and guidance policy to `$aquarium:dev-setup`.\n"
         "The repository skill interprets the list as target intent, preserves that attempt\n"
         "unchanged, and never repeats global installation or freshness work.\n",
-        "For each ready target, after manifest revalidation and canonical identity freeze, pass the requesting skill, manifest digest, target index, canonical Git root, complete effective tool list, explicit local MCP overrides, and guidance policy to `/aquarium:dev-setup`. The repository skill interprets the list as target intent and never repeats global installation or freshness work.\n",
+        "For each ready target, after manifest revalidation and canonical identity freeze, pass the requesting skill, manifest digest, target index, canonical Git root, the separately resolved requested working directory when guidance is proposed, complete effective tool list, effective `global_mcp` and `local_mcp` lists, `sorage_project_slug`, `mulgae_artist`, and guidance policy to `/aquarium:dev-setup`. The repository skill interprets the list as target intent and never repeats global installation or freshness work.\n",
     ),
+    # The bundle's recording-receipt paragraph (dev-setup-bundle/SKILL.md,
+    # shipped count 1), re-derived against v0.1.21; v0.1.18 inserted the
+    # recorder's v2 language-observation sentence; the
+    # paragraph still settles ledger receipts only, so it goes whole.
     (
         "Once a target enters `dev-setup`, accept its recording receipt only when the\n"
         "attempt ID, canonical root, predecessor row revision, and resulting revisions\n"
         "match the handoff contract. Never record that target a second time. If a target\n"
         "settles before entry, complete and record the bundle-owned original attempt once.\n"
+        "The recorder's v2 receipt reports language observation separately; an\n"
+        "unavailable scan does not invalidate an otherwise successful setup record.\n"
         "On recording failure, preserve the exact record-only retry request and never\n"
         "repeat target mutations. Validate the closed recording-result fields and problem\n"
         "codes against the same specification. Continue independent targets.\n"
@@ -346,91 +416,51 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # Upstream's host goal is a Codex goal the model creates, completes, and
     # marks blocked through a tool. Claude Code's counterpart is the session
     # `/goal`: the user sets or clears it, and an evaluator judges it from the
-    # conversation after every turn and ends it once it holds or is impossible, while the todo tools this edition
-    # used to name are off by default on Fable 5.1 and Opus 5.5. Sentences
-    # whose verbs would create, complete, or block the goal are rewritten to
-    # work under it and report; this one carries a `$aquarium:` sigil, so it
-    # runs before that rule, and the rest precede the generic mapping below.
+    # conversation after every turn and ends it once it holds or is impossible,
+    # while the todo tools this edition used to name are off by default on
+    # Fable 5.1 and Opus 5.5. Sentences whose verbs would create, complete, or
+    # block the goal are rewritten to work under it and report; this one, from
+    # task-handler, carries a `$aquarium:` sigil, so it runs before that rule,
+    # and the rest precede the generic mapping below. v0.1.20 added the selected
+    # Podway finalization to the completion condition, and the judge is named
+    # the `/goal` evaluator because v0.1.20 made Evaluator an Aquarium role.
     (
-        "When a Codex goal is authorized, keep it active through every phase. Mark it complete only after `$aquarium:task-close` succeeds and no required task work or authorized lifecycle action remains. Mark the goal blocked only when the host's goal tool defines a blocked state and its own repeated-blocker rule is met by the same unresolved external blocker persisting across consecutive goal turns with no authorized action remaining; otherwise keep it active and report the exact gap.",
-        "When the user has set a Claude Code session goal, keep working toward it through every phase. Report it met only after `/aquarium:task-close` succeeds and no required task work or authorized lifecycle action remains. Report it unreachable only when the same unresolved external blocker persists across consecutive turns with no authorized action remaining, because the evaluator may then end it as impossible; otherwise keep working and report the exact gap.",
+        "When a Codex goal is authorized, keep it active through every phase. Mark it complete only after `$aquarium:task-close` succeeds, any selected Podway finalization is verified, and no required task work or authorized lifecycle action remains. Mark the goal blocked only when the host's goal tool defines a blocked state and its own repeated-blocker rule is met by the same unresolved external blocker persisting across consecutive goal turns with no authorized action remaining; otherwise keep it active and report the exact gap.",
+        "When the user has set a Claude Code session goal, keep working toward it through every phase. Report it met only after `/aquarium:task-close` succeeds, any selected Podway finalization is verified, and no required task work or authorized lifecycle action remains. Report it unreachable only when the same unresolved external blocker persists across consecutive turns with no authorized action remaining, because the `/goal` evaluator may then end it as impossible; otherwise keep working and report the exact gap.",
     ),
     ("$aquarium:", "/aquarium:"),
-    # The shared disposition contract credits re-review after remediation to
-    # every route — v0.1.17 added the native subagent route and the waiver —
-    # and hedges only for a dormant Independent Review upstream could
-    # re-enable. This edition's Independent Review reads the live target
-    # exactly as Orca's reviewer does, so it is never dormant here and
-    # upstream's hedge is false in this artifact.
-    (
-        "Mulgae creates a fresh native capture, Orca reads the corrected live target, native Codex requires a fresh report-only subagent, and a waiver requires a new coordinator assessment. Independent Review would require a fresh capture if separately re-enabled.",
-        "Mulgae creates a fresh native capture, Independent Review and Orca read the corrected live target, native Claude Code requires a fresh report-only subagent, and a waiver requires a new coordinator assessment.",
-    ),
-    # Upstream v0.1.17 lets Task, Epic, and validation workflows select one
-    # review route, one of which is a fresh host-native subagent it names
-    # "native Codex". On this host that route is Claude Code's own subagent
-    # review, so the prose renames it; the `native-codex` route ID and the
-    # Podway Procedure labels stay byte-canonical (see `CANONICAL_PHRASES`).
-    # The routing contract also says Independent Review remains disabled, which
-    # is false here: it stays a live standalone entry point, though still not a
-    # selectable workflow route. Every rule whose anchor contains the phrase
-    # runs before the generic rename at the end of this block.
-    (
-        "Independent Review remains disabled and is not a\nselectable route.",
-        "On this host the `native-codex` route ID and the Podway Procedure labels and criteria that name this route keep upstream's canonical bytes and mean Claude Code's native subagent review, which dispatches the bundled `aquarium:independent-reviewer` agent once over the complete Review Brief. `/aquarium:independent-review` stays live as a standalone report-only entry point and is not a selectable route.",
-    ),
-    (
-        "Do not describe native Codex\nas Independent Review, Dolgorae, Orca, or Mulgae.",
-        "Do not describe native Claude Code as Dolgorae, Orca, or Mulgae, or report its checkpoint as a standalone Independent Review run, although both dispatch the bundled reviewer agent.",
-    ),
-    # The `native-codex` route runs through the bundled `aquarium:independent-reviewer`:
-    # its tool allowlist removes the editing, writing, and agent-dispatch
-    # tools the route forbids, its prompt forbids writing through Bash, and it
-    # reviews the whole Review Brief in one pass. Three of these anchors
-    # contain the upstream phrase, so the block precedes the generic rename.
-    (
-        "For `native-codex`, create one fresh host subagent with the exact bounded target, complete Review Brief, and static report-only instructions. Require no edits, tests, nested agents, or lifecycle mutation. Preserve the host delegation identity and reviewer provenance without calling it independent review.",
-        "For `native-codex`, dispatch one fresh `aquarium:independent-reviewer` subagent through this host's own subagent mechanism with the exact bounded target, the complete Review Brief, and static report-only instructions, and have it review the whole brief in one pass rather than through a single lens. Leave it on its Opus default unless the user explicitly asked for Fable. Its tools already exclude the editing, writing, and agent-dispatch tools; the specification must still forbid edits through Bash, tests, and lifecycle mutation. If that agent is unavailable, record a preflight failure for this route and stop for user direction rather than substituting another subagent type. Preserve the dispatch identity and reviewer provenance without reporting it as a standalone Independent Review run.",
-    ),
-    (
-        "native Codex through one fresh report-only host subagent",
-        "native Claude Code through one fresh report-only `aquarium:independent-reviewer` subagent reviewing the whole brief in one pass",
-    ),
-    (
-        "native Codex through one fresh static report-only host subagent",
-        "native Claude Code through one fresh static report-only `aquarium:independent-reviewer` subagent reviewing the whole brief in one pass",
-    ),
-    (
-        "For `native-codex`, require fresh host delegation.",
-        "For `native-codex`, require that this host's subagent mechanism offers the bundled `aquarium:independent-reviewer` agent.",
-    ),
-    (
-        "Native Codex\n"
-        "requires fresh host delegation.",
-        "Native Claude Code\n"
-        "requires the bundled `aquarium:independent-reviewer` agent.",
-    ),
-    # The leading space keeps a word that merely ends in "native", such as
-    # "alternative", from being renamed; a capital N already starts a word.
-    (" native Codex", " native Claude Code"),
-    ("Native Codex", "Native Claude Code"),
     # `$use-podway`, `$use-sanho`, `$use-mulgae`, `$use-gaori`. A prefix rule
     # covers the family and any later sibling; `/use-` cannot re-match it.
     ("$use-", "/use-"),
     # `$create-podway-procedure`, new in v0.1.13. A prefix rule covers the
     # family like `$use-`; the maintainer authoring skill installs user-scoped
-    # on both hosts and keeps a bare name. Its one shipped occurrence is
-    # references/podway-integration.md — the agents-guidance.md occurrence
-    # lives inside an override and is not counted.
+    # on both hosts and keeps a bare name. The rule matches twice, in
+    # references/podway-integration.md and in
+    # skills/dev-setup/references/agents-guidance.md: that file's occurrence
+    # lived inside an override and went uncounted until this edition retired
+    # that override when it adopted v0.1.21.
     ("$create-", "/create-"),
     ("$lore-commits", "/lore-commits"),
-    ("$orca-cli", "/orca-cli"),
+    # New (dev-setup/references/agents-guidance.md, shipped count 1). The Lora
+    # query skill installs user-scoped like `lore-commits` and keeps a bare
+    # name. The existing `$lore-` needle already covers it. Place after the
+    # `$lore-commits` rule; neither anchor contains the other.
+    ("$lore-query", "/lore-query"),
+    # Upstream v0.1.19 delegates native Herdr control to the separately installed
+    # Herdr skill, which Claude Code invokes by its slash name.
+    ("$herdr", "/herdr"),
     # Ouroboros installs as a Claude Code plugin, so its skills carry the
     # `ouroboros:` namespace. Codex installs them user-scoped and addresses them
     # bare, which is why upstream writes `$interview` rather than a prefixed
     # form. Deslop installs user-scoped on both hosts and keeps a bare name.
     ("$interview", "/ouroboros:interview"),
     ("$deslop", "/deslop"),
+    # New (dev-setup/references/agents-guidance.md, shipped count 1 each).
+    # Humanizer and im-not-ai's `humanize-korean` install user-scoped under the
+    # Claude Code skill root and keep bare names; neither anchor is a prefix of
+    # the other, and the new `$humanize` needle covers both families.
+    ("$humanizer", "/humanizer"),
+    ("$humanize-korean", "/humanize-korean"),
     ("$seed", "/ouroboros:seed"),
     ("$pm", "/ouroboros:pm"),
     ("$qa", "/ouroboros:qa"),
@@ -438,7 +468,7 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # Codex tool is optional there. `AskUserQuestion` is always present on this
     # host, so the hedge would read as permission to fall back to prose. Must
     # run before the generic `request_user_input` rule, whose output the anchor
-    # would otherwise never contain — the orca-supervision precedent.
+    # would otherwise never contain.
     (
         "Use structured `request_user_input` when available and ask all three questions together",
         "Use structured `AskUserQuestion` and ask all three questions together",
@@ -454,10 +484,12 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ),
     # The one defining sentence lives in the Podway contract, which every
     # goal-coordinating skill reads; `/goal` is named only where the user is
-    # handed a condition to type.
+    # handed a condition to type. It runs before the generic `Codex goal` rule,
+    # and the goal's judge is named the `/goal` evaluator so it cannot be read
+    # as the Aquarium Evaluator v0.1.20 introduced.
     (
         "Codex goals and Podway goals have separate creation rules and lifecycles. Create a Codex goal only when explicitly requested under its current tool contract; a Podway goal does not authorize one.",
-        "Claude Code session goals and Podway goals have separate creation rules and lifecycles. A Claude Code session goal is the completion condition the user sets with `/goal <condition>` or clears with `/goal clear`, distinct from a Podway session's goal; after each turn an evaluator judges it from the conversation alone and ends it once it holds or is judged impossible, so surface completion evidence or the exact blocker there instead of trying to mark it, and never propose one merely because a Podway goal exists.",
+        "Claude Code session goals and Podway goals have separate creation rules and lifecycles. A Claude Code session goal is the completion condition the user sets with `/goal <condition>` or clears with `/goal clear`, distinct from a Podway session's goal; after each turn the `/goal` evaluator, a separate model rather than an Aquarium Evaluator, judges it from the conversation alone and ends it once it holds or is judged impossible, so surface completion evidence or the exact blocker there instead of trying to mark it, and never propose one merely because a Podway goal exists.",
     ),
     (
         "Create a separate Codex goal only on explicit user request under its tool contract",
@@ -491,6 +523,13 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "Do not create the handoff file, a Codex goal, or a Podway session",
         "Do not create the handoff file or a Podway session, or propose a Claude Code session goal,",
     ),
+    # New, directly before ("Codex goal", "Claude Code session goal"): v0.1.20
+    # gates completing the goal on verified Podway finalization; the model
+    # reports it met instead.
+    (
+        "before completing any authorized Codex goal or continuing to the next Task",
+        "before reporting any authorized Claude Code session goal met or continuing to the next Task",
+    ),
     ("Codex goal", "Claude Code session goal"),
     ("fresh Codex audit", "fresh from-scratch audit"),
     # Ouroboros registers its skills with the host agent, so the component whose
@@ -508,27 +547,40 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "For Ouroboros, this means one CLI upgrade; its Claude Code integration is one plugin installation that global setup diagnoses rather than installs.",
     ),
     # `dev-setup` was a full-file override until v0.1.15 moved user-global
-    # installation into `dev-setup-global`. What it still diverges on is three
-    # literal spans, two of which carry a forbidden needle and would need a rule
+    # installation into `dev-setup-global`. What it still diverges on is two
+    # literal spans, both of which carry a forbidden needle and would need a rule
     # whether or not the override stayed, so the override is retired and these
     # take its place. Each anchor occurs exactly once in upstream Markdown.
     (
         "For a canonical user-global skill path under `~/.agents/skills`, or the active canonical Codex skill root where an upstream contract requires it, check only whether the path exists.",
         "For a canonical user-global skill path under the configured Claude Code skill root \u2014 `$CLAUDE_CONFIG_DIR/skills` when that variable is set, otherwise `~/.claude/skills` \u2014 check only whether the path exists.",
     ),
+    # The dev-setup registration bullet (dev-setup/SKILL.md, shipped count 1),
+    # re-derived against v0.1.21; v0.1.18 rewrote it around bundle scope lists and
+    # `--expected-*-mcp`; the
+    # replacement keeps the old rule's intent of naming this host's local
+    # registration file, and maps the scope names onto Claude Code's files.
     (
-        "Create, change, or remove a project-local registration only when the user explicitly requested local scope or repository authority already requires it. Preserve unrelated Codex configuration.",
-        "Create, change, or remove a project-local `.mcp.json` registration only when the user explicitly requested local scope or repository authority already requires it. Preserve unrelated Claude Code configuration.",
+        "Create, change, or remove a registration only under its existing action-specific approval and preserve unrelated Codex configuration.",
+        "Create, change, or remove a registration only under its existing action-specific approval, using the user configuration for global scope and the project `.mcp.json` for local scope, and preserve unrelated Claude Code configuration.",
     ),
-    # Claude Code resolves a `@AGENTS.md` import before the first turn but never
-    # reads `AGENTS.md` on its own, so prose-only delegation silently leaves the
-    # canonical guidance unloaded. `agents-guidance.md` owns the delegation file;
-    # this makes the skill that reviews the pair report the gap.
+    # New (dev-setup-bundle/SKILL.md, shipped count 1). The effective registration
+    # a bundle target compares against is this host's.
     (
-        "Reuse verified repository facts while assessing structure, behavior, duplication, and project-specific constraints. An explicit diagnosis-only request reports findings without drafting a proposal.\n",
-        "Reuse verified repository facts while assessing structure, behavior, duplication, and project-specific constraints. An explicit diagnosis-only request reports findings without drafting a proposal.\n"
-        "\n"
-        "Claude Code loads CLAUDE.md but never reads AGENTS.md on its own, so a CLAUDE.md that delegates in prose alone leaves the canonical guidance unloaded. Report that as a gap and propose the delegation file in `agents-guidance.md`, whose `@AGENTS.md` line Claude Code resolves as a real import before the first turn.\n",
+        "Compare each requested MCP scope with the effective Codex registration;",
+        "Compare each requested MCP scope with the effective Claude Code registration;",
+    ),
+    # New (dev-setup-bundle/SKILL.md, shipped count 1). Live exposure is a
+    # property of the running host session.
+    (
+        "Neither a configured registration nor a role config proves live exposure in this Codex session.",
+        "Neither a configured registration nor a role config proves live exposure in this Claude Code session.",
+    ),
+    # New (dev-setup-bundle/references/manifest.md, shipped count 1). An
+    # unrequested registration stays visible to this host.
+    (
+        "An unrequested registration is preserved and may still be exposed by Codex.",
+        "An unrequested registration is preserved and may still be exposed by Claude Code.",
     ),
     # release-qa's dispatch instructions are host-neutral because Codex has no
     # first-class subagents. This host does, and independent subagents launched
@@ -536,17 +588,19 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     # Naming the mechanism follows upstream's own charter of making supported
     # native capabilities readily usable; the tool's own name is deliberately
     # not spelled, because Claude Code has already renamed it once and a stale
-    # name would send the model looking for a tool it does not have. Workers
-    # request `opus`, the baseline for every delegated role here: a worker with
-    # no explicit model inherits the coordinator's, so a Fable session would
-    # otherwise fan out Fable workers. Fable stays an explicit user choice.
+    # name would send the model looking for a tool it does not have. Executors
+    # request `opus`, the baseline for every delegated role here: an executor
+    # with no explicit model inherits the coordinator's, so a Fable session
+    # would otherwise fan out Fable executors. Fable stays an explicit user
+    # choice. v0.1.20 renamed release-qa's workers to executors.
     (
         "Use the available agent delegation surface to dispatch fresh subagents for independent risk clusters.",
-        "Use the host's own subagent mechanism to dispatch fresh subagents for independent risk clusters, requesting the `opus` model for every worker unless the user explicitly asked for Fable, because a worker without an explicit model inherits the coordinator's.",
+        "Use the host's own subagent mechanism to dispatch fresh subagents for independent risk clusters, requesting the `opus` model for every executor unless the user explicitly asked for Fable, because an executor without an explicit model inherits the coordinator's.",
     ),
+    # The parallel-dispatch sentence that follows it, in the same terms.
     (
         "Parallelize independent clusters when capacity allows without weakening isolation.",
-        "Parallelize independent clusters by launching their workers in a single message when capacity allows, without weakening isolation.",
+        "Parallelize independent clusters by launching their executors in a single message when capacity allows, without weakening isolation.",
     ),
     # `epic-handler` may add an optional fresh read-only perspective and names
     # no model for it, so on a Fable session it would inherit Fable; it requests
@@ -554,6 +608,45 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     (
         "Use a fresh read-only subagent for an additional perspective when task risk or uncertainty merits it.",
         "Use a fresh read-only subagent for an additional perspective when task risk or uncertainty merits it, requesting the `opus` model unless the user explicitly asked for Fable.",
+    ),
+    # v0.1.20's ordinary v3 defining paragraph; Opus
+    # baseline plus the reference-level counterpart of DELEGATION_NOTE (repeats
+    # its Skill-tool clause, so a tool rename retires both).
+    (
+        "Operational roles use supported native subagents of the current Coordinator's\n"
+        "harness: a Codex Coordinator uses Codex Executors and a Codex Evaluator; a Claude Coordinator\n"
+        "uses Claude Executors and a Claude Evaluator. Preserve explicitly selected supported\n"
+        "model options and otherwise use harness defaults. Unavailable internal model\n"
+        "telemetry does not block ordinary work. Selected technical reviews keep their\n"
+        "own provider and topology, including Claude through Herdr for a Codex workflow.",
+        "Operational roles use supported native subagents of the current Coordinator's harness: a Claude Code Coordinator dispatches its Executors and its Evaluator as Claude Code subagents through this host's own subagent mechanism. Request the `opus` model for each unless the user names another supported model, so Fable runs only on the user's explicit request, because a subagent dispatched without a model inherits the session's; preserve any other option the user explicitly selects that the mechanism supports. Unavailable internal model telemetry does not block ordinary work. Selected technical reviews keep their own provider and topology, including a reviewer from another AI family that Herdr runs for a Claude Code workflow.\n\n"
+        "When the Coordinator's assignment hands a subagent a step that an Aquarium skill owns — however its text phrases the hand-off, including a Procedure node instruction that names the skill bare, such as `Use task-implement` — resolve that skill's `SKILL.md` in this plugin (`../skills/<name>/SKILL.md` from this reference), put its absolute path into the assignment, and have the subagent read the file in full and follow it, because a subagent cannot load a gated skill through the Skill tool. Give each role its own instructions the same way: the Evaluator the absolute path of [Goal Evaluator](../skills/goal-evaluator/SKILL.md), and each Executor that of [Executor guidance](executor-guidance.md).",
+    ),
+    # New, directly after ordinary_v3_roles: the retained v2 contract's copy, in
+    # its Primary/Worker/Judge vocabulary.
+    (
+        "Operational roles use supported native subagents of the current Primary's\n"
+        "harness: a Codex Primary uses Codex Workers and a Codex Judge; a Claude Primary\n"
+        "uses Claude Workers and a Claude Judge. Preserve explicitly selected supported\n"
+        "model options and otherwise use harness defaults. Unavailable internal model\n"
+        "telemetry does not block ordinary work. Selected technical reviews keep their\n"
+        "own provider and topology, including Claude through Herdr for a Codex workflow.",
+        "Operational roles use supported native subagents of the current Primary's harness: a Claude Code Primary dispatches its Workers and its Judge as Claude Code subagents through this host's own subagent mechanism. Request the `opus` model for each unless the user names another supported model, so Fable runs only on the user's explicit request, because a subagent dispatched without a model inherits the session's; preserve any other option the user explicitly selects that the mechanism supports. Unavailable internal model telemetry does not block ordinary work. Selected technical reviews keep their own provider and topology, including a reviewer from another AI family that Herdr runs for a Claude Code workflow.\n\n"
+        "When the Primary's assignment hands a subagent a step that an Aquarium skill owns — however its text phrases the hand-off, including a Procedure node instruction that names the skill bare, such as `Use task-implement` — resolve that skill's `SKILL.md` in this plugin (`../skills/<name>/SKILL.md` from this reference), put its absolute path into the assignment, and have the subagent read the file in full and follow it, because a subagent cannot load a gated skill through the Skill tool.",
+    ),
+    # The two orchestration references the handlers read before dispatching
+    # name no model; this edition names one wherever its text dispatches a
+    # subagent, so each states the Opus baseline and points at the ordinary
+    # contract that also carries the path hand-off.
+    (
+        "The current Coordinator coordinates supported native Executors and an independent\n"
+        "report-only Evaluator in its own harness.",
+        "The current Coordinator coordinates supported native Executors and an independent report-only Evaluator in its own harness; on Claude Code they are subagents dispatched with the `opus` model unless the user names another, each assignment carrying the owning Aquarium skill's `SKILL.md` path as the [ordinary contract](ordinary-agent-orchestration.md) directs.",
+    ),
+    (
+        "Use the Coordinator harness's supported native Executors and independent report-only\n"
+        "Evaluator without prior qualification, role snapshots or configuration digests.",
+        "Use the Coordinator harness's supported native Executors and independent report-only Evaluator without prior qualification, role snapshots or configuration digests; on Claude Code, dispatch them as subagents with the `opus` model unless the user names another, as the [ordinary contract](ordinary-agent-orchestration.md) directs.",
     ),
 )
 
@@ -1827,13 +1920,23 @@ SCRIPT_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
     ),
     # The per-home options name a dimension this host does not have. They are
     # removed from the signature, the parser, and the call site together, so the
-    # generated-script arity gate proves no caller was left behind.
+    # generated-script arity gate proves no caller was left behind. This is the
+    # `inspect_global` signature (dev-setup-global/scripts/
+    # inspect_global_tools.py, shipped count 1), re-derived against v0.1.21;
+    # v0.1.18 appended
+    # `sorage_upgrade_preflight_complete` after the two per-home parameters.
+    # The call-site rule below drops their two arguments from the call, so the
+    # flag is the fifth positional argument and must be the fifth parameter:
+    # a signature that kept `codex_homes` would bind it there, pass the arity
+    # gate, and never reach `inspect_global_sorage`.
     (
         "    components: tuple[str, ...] | None = None,\n"
         "    codex_homes: tuple[str, ...] = (),\n"
         "    verify_ouroboros_release: bool = False,\n"
+        "    sorage_upgrade_preflight_complete: bool = False,\n"
         ") -> dict[str, Any]:\n",
         "    components: tuple[str, ...] | None = None,\n"
+        "    sorage_upgrade_preflight_complete: bool = False,\n"
         ") -> dict[str, Any]:\n",
     ),
     # Ouroboros reaches this host as a Claude Code plugin: one installation, no
@@ -2062,7 +2165,8 @@ FORBIDDEN: tuple[tuple[str, str], ...] = (
     ("$use-", "add a substitution rule"),
     ("$create-", "add a substitution rule"),
     ("$lore-", "add a substitution rule"),
-    ("$orca-cli", "add a substitution rule"),
+    ("$herdr", "add a substitution rule"),
+    ("$humanize", "add a substitution rule"),
     ("request_user_input", "add a substitution rule or an override"),
     ("--agent codex", "add a substitution rule or an override"),
     (".agents/skills", "Claude Code loads ~/.claude/skills; add a substitution rule"),
@@ -2100,20 +2204,6 @@ SIGIL_LITERALS: tuple[str, ...] = (
     "$aquarium_commit_email",
 )
 
-# Phrases the forbidden scan tolerates inside files that are never rewritten,
-# each paired with the glob its tolerance is limited to. Podway requires the
-# installed Procedure copies to match the bundled bytes, so v0.1.17's route
-# labels and criteria that call the host-native review route "native Codex"
-# must ship as upstream wrote them; the prose elsewhere says native Claude
-# Code. Only the phrase is masked, and only where it starts a word, so a word
-# such as "alternative" never hides behind it; every other needle still
-# applies, and `check_canonical_phrases` stops generation when a phrase no
-# longer occurs or its scope reaches a file a rule could rewrite. `fnmatch`
-# lets `*` cross `/`.
-CANONICAL_PHRASES: tuple[tuple[str, str], ...] = (
-    ("assets/podway/procedures/*.yaml", "native Codex"),
-    ("assets/podway/procedures/*.yaml", "Native Codex"),
-)
 
 
 class SyncError(RuntimeError):
@@ -2258,38 +2348,6 @@ def check_excluded_skills() -> None:
         if inside:
             raise SyncError(
                 f"additions live under the excluded skill `{name}`: " + ", ".join(inside)
-            )
-
-
-def check_canonical_phrases() -> None:
-    """Refuse a canonical-phrase tolerance that no longer guards anything real.
-
-    Each phrase must hold a forbidden needle, or the tolerance is dead weight;
-    it must still occur upstream inside its scope, or it would mask the next
-    phrase that happens to spell it; and its scope may reach only files no rule
-    rewrites, because the tolerance exists only for bytes this artifact must not
-    change.
-    """
-    needles = [needle for needle, _remedy in FORBIDDEN]
-    for scope, phrase in CANONICAL_PHRASES:
-        if not any(needle in phrase for needle in needles):
-            raise SyncError(f"canonical phrase `{phrase}` holds no forbidden needle; remove it")
-        scoped = [
-            path
-            for path in sorted(UPSTREAM_PLUGIN.rglob("*"))
-            if path.is_file()
-            and fnmatch.fnmatchcase(path.relative_to(UPSTREAM_PLUGIN).as_posix(), scope)
-        ]
-        rewritten = [path for path in scoped if rules_for(path) is not None]
-        if rewritten:
-            raise SyncError(
-                f"canonical phrase scope `{scope}` reaches rewritten files: "
-                + ", ".join(str(path.relative_to(UPSTREAM_PLUGIN)) for path in rewritten)
-            )
-        if not any(canonical_phrase_pattern(phrase).search(path.read_text(encoding="utf-8")) for path in scoped):
-            raise SyncError(
-                f"canonical phrase `{phrase}` no longer occurs upstream in `{scope}`; "
-                "remove it so it cannot mask a future mention"
             )
 
 
@@ -2477,11 +2535,14 @@ def transform_text(destination: Path, shadowed: set[str]) -> dict[tuple[str, int
     for path in sorted(destination.rglob("*")):
         if not path.is_file():
             continue
+        relative = path.relative_to(destination).as_posix()
+        if any(relative.startswith(f"{directory}/") for directory in VERBATIM_DIRECTORIES):
+            continue
         selected = rules_for(path)
         if selected is None:
             continue
         table, rules = selected
-        counted = str(path.relative_to(destination)) not in shadowed
+        counted = relative not in shadowed
         original = path.read_text(encoding="utf-8")
         replaced = original
         for index, (old, new) in enumerate(rules):
@@ -2686,19 +2747,6 @@ def write_plugin_manifest(destination: Path) -> None:
     )
 
 
-def canonical_phrase_pattern(phrase: str) -> re.Pattern[str]:
-    """Match a tolerated phrase only where it starts a word."""
-    return re.compile(rf"(?<![A-Za-z]){re.escape(phrase)}")
-
-
-def mask_canonical_phrases(text: str, relative: Path) -> str:
-    """Remove the tolerated phrases from one file's text before the needle scan."""
-    for scope, phrase in CANONICAL_PHRASES:
-        if fnmatch.fnmatchcase(relative.as_posix(), scope):
-            text = canonical_phrase_pattern(phrase).sub("", text)
-    return text
-
-
 def check_forbidden(destination: Path, codex_exemptions: set[str]) -> None:
     """Scan every generated text file for host-specific text.
 
@@ -2707,15 +2755,14 @@ def check_forbidden(destination: Path, codex_exemptions: set[str]) -> None:
     is not a match, because the needle is `Codex` rather than `CODEX`.
 
     Only the `Codex` needle is skipped, and only for reviewed exemptions; every
-    other needle applies to every file. A byte-canonical file has only its
-    `CANONICAL_PHRASES` masked, so any other forbidden text in it still fails.
+    other needle applies to every file, byte-canonical Procedures included.
     """
     failures: list[str] = []
     for path in sorted(destination.rglob("*")):
         if not path.is_file() or path.suffix not in SCANNED_SUFFIXES:
             continue
         relative = path.relative_to(destination)
-        text = mask_canonical_phrases(path.read_text(encoding="utf-8"), relative)
+        text = path.read_text(encoding="utf-8")
         for needle, remedy in FORBIDDEN:
             if needle == "Codex" and str(relative) in codex_exemptions:
                 continue
@@ -2892,7 +2939,6 @@ def generate(destination: Path) -> tuple[str, list[str]]:
     check_excluded_files()
     check_excluded_skills()
     check_sigil_literals()
-    check_canonical_phrases()
     copy_tree(destination)
     excluded = remove_excluded(destination)
     excluded_skills = remove_excluded_skills(destination)

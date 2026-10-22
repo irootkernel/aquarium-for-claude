@@ -15,16 +15,15 @@ from typing import Any, NoReturn
 
 ERROR_SCHEMA = "aquarium-release-qa-error/v1"
 CLUSTER_SCHEMA = "aquarium-release-qa-cluster-result/v1"
-FULL_INPUT_SCHEMA = "aquarium-release-qa-full-pass/v1"
-RECORD_SCHEMA = "aquarium-release-qa-confirmation-record/v2"
+FULL_INPUT_SCHEMA = "aquarium-release-qa-full-pass/v2"
+RECORD_SCHEMA = "aquarium-release-qa-confirmation-record/v3"
 PREPARE_SCHEMA = "aquarium-release-qa-confirmation-prepare/v2"
-MANIFEST_SCHEMA = "aquarium-release-qa-confirmation-manifest/v2"
+MANIFEST_SCHEMA = "aquarium-release-qa-confirmation-manifest/v3"
 BEGIN_SCHEMA = "aquarium-release-qa-confirmation-begin/v2"
 CLAIM_SCHEMA = "aquarium-release-qa-confirmation-claim/v2"
 FINISH_SCHEMA = "aquarium-release-qa-confirmation-finish/v2"
 ADMISSION_SCHEMA = "aquarium-release-qa-confirmation-settlement-admission/v1"
 RESULT_SCHEMA = "aquarium-release-qa-confirmation-result/v2"
-MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_OUTPUT_BASENAME_BYTES = 240
 OUTCOMES = {"pass", "finding", "gap"}
 
@@ -45,8 +44,6 @@ def read_json(path_value: str) -> dict[str, Any]:
     path = Path(path_value)
     if path.is_symlink() or not path.is_file():
         fail("input_invalid", f"JSON input must be a regular non-symlink file: {path}")
-    if path.stat().st_size > MAX_JSON_BYTES:
-        fail("input_too_large", f"JSON input exceeds {MAX_JSON_BYTES} bytes: {path}")
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -82,11 +79,12 @@ def require_fields(value: dict[str, Any], field: str, expected: set[str]) -> Non
 
 def create_once_write(path_value: str | Path, value: Any) -> Path:
     path = Path(path_value)
+    payload = canonical_bytes(value)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "wb") as target:
-            target.write(canonical_bytes(value))
+            target.write(payload)
             target.flush()
             os.fsync(target.fileno())
         try:
@@ -107,8 +105,8 @@ def create_once_write(path_value: str | Path, value: Any) -> Path:
 
 
 def text(value: Any, field: str) -> str:
-    if not isinstance(value, str) or not value or len(value) > 4096:
-        fail("field_invalid", f"{field} must be a non-empty bounded string")
+    if not isinstance(value, str) or not value:
+        fail("field_invalid", f"{field} must be a non-empty string")
     return value
 
 
@@ -169,16 +167,43 @@ def exact_commit(repo: Path, value: Any, field: str) -> str:
     return resolved
 
 
-def baseline_commit(repo: Path, value: Any) -> str:
-    baseline = text(value, "previous_release")
+def baseline_commit(repo: Path, mode: Any, previous: Any) -> str | None:
+    if mode == "first_release":
+        if previous is not None:
+            fail("baseline_invalid", "first release must not name a previous release")
+        return None
+    if mode != "previous_release":
+        fail("baseline_invalid", "baseline_mode must explicitly select a release mode")
+    baseline = text(previous, "previous_release")
     return run_git(repo, "rev-parse", "--verify", f"{baseline}^{{commit}}")
 
 
+def validate_baseline_identity(record: dict[str, Any]) -> None:
+    mode = record.get("baseline_mode")
+    previous = record.get("previous_release")
+    baseline = record.get("baseline_sha")
+    if mode == "first_release":
+        if previous is not None or baseline is not None:
+            fail("baseline_invalid", "first release baseline fields must be null")
+    elif mode == "previous_release":
+        text(previous, "previous_release")
+        value = text(baseline, "baseline_sha")
+        if len(value) not in {40, 64} or any(
+            c not in "0123456789abcdef" for c in value
+        ):
+            fail("baseline_invalid", "baseline_sha must be an exact commit ID")
+    else:
+        fail("baseline_invalid", "baseline_mode must explicitly select a release mode")
+
+
 def release_range(
-    repo: Path, baseline: str, candidate: str
+    repo: Path, baseline: str | None, candidate: str
 ) -> tuple[list[str], list[str]]:
-    if run_git(repo, "merge-base", "--is-ancestor", baseline, candidate) != "":
-        pass
+    if baseline is None:
+        commits = run_git(repo, "rev-list", "--reverse", candidate).splitlines()
+        paths = run_git_raw(repo, "ls-tree", "-r", "--name-only", "-z", candidate)
+        return commits, [path for path in paths.split("\0") if path]
+    run_git(repo, "merge-base", "--is-ancestor", baseline, candidate)
     commits = run_git(
         repo, "rev-list", "--reverse", f"{baseline}..{candidate}"
     ).splitlines()
@@ -407,19 +432,76 @@ def changed_surface_mappings(raw: Any) -> list[dict[str, Any]]:
     return result
 
 
+def design_gate_matrix(
+    source: dict[str, Any], known: set[str], delta_scenarios: set[str]
+) -> list[dict[str, Any]]:
+    state = source.get("design_gate_state")
+    if state not in ("enrolled", "not_enrolled"):
+        fail("field_invalid", "design_gate_state must be enrolled or not_enrolled")
+    gates = string_list(
+        source.get("active_design_gates"), "active_design_gates", nonempty=False
+    )
+    raw = source.get("design_gate_matrix")
+    if not isinstance(raw, list):
+        fail("gate_matrix_incomplete", "design_gate_matrix must be a list")
+    if state == "not_enrolled" and (gates or raw):
+        fail("gate_matrix_invalid", "unenrolled repositories cannot declare gates")
+    result = []
+    for item in raw:
+        if not isinstance(item, dict):
+            fail("gate_matrix_invalid", "gate matrix entries must be objects")
+        require_fields(
+            item,
+            "design_gate_matrix entry",
+            {"gate", "positive_scenarios", "failure_scenarios"},
+        )
+        row = {"gate": text(item["gate"], "design_gate_matrix.gate")}
+        for field in ("positive_scenarios", "failure_scenarios"):
+            scenarios = string_list(item[field], f"design_gate_matrix.{field}")
+            if not set(scenarios).issubset(known):
+                fail("matrix_unknown_scenario", "gate references an unknown scenario")
+            if set(scenarios) & delta_scenarios:
+                fail("gate_matrix_invalid", "gate runs cannot count as delta coverage")
+            row[field] = scenarios
+        result.append(row)
+    identities = [item["gate"] for item in result]
+    if len(identities) != len(set(identities)) or set(identities) != set(gates):
+        fail("gate_matrix_incomplete", "gate matrix must cover every active gate once")
+    return result
+
+
 def freeze_full(spec: dict[str, Any], output: str) -> dict[str, Any]:
     if spec.get("schema") != FULL_INPUT_SCHEMA:
         fail("schema_invalid", f"freeze input must use {FULL_INPUT_SCHEMA}")
+    require_fields(
+        spec,
+        "full pass",
+        {
+            "schema",
+            "repository",
+            "version",
+            "baseline_mode",
+            "previous_release",
+            "candidate_sha",
+            "evidence_root",
+            "design_gate_state",
+            "active_design_gates",
+            "design_gate_matrix",
+            "cluster_results",
+            "commit_matrix",
+            "surface_matrix",
+        },
+    )
     repo = repository(spec.get("repository"))
     candidate = exact_commit(repo, spec.get("candidate_sha"), "candidate_sha")
     clean_exact_main(repo, candidate)
-    baseline = baseline_commit(repo, spec.get("previous_release"))
+    baseline = baseline_commit(
+        repo, spec.get("baseline_mode"), spec.get("previous_release")
+    )
     commits, paths = release_range(repo, baseline, candidate)
     if not commits:
         fail("delta_empty", "full release-QA requires a non-empty release delta")
     root = physical_evidence_root(spec.get("evidence_root"))
-    if spec.get("design_gate_state") not in {"enrolled", "not_enrolled"}:
-        fail("field_invalid", "design_gate_state must be enrolled or not_enrolled")
     result_paths = string_list(spec.get("cluster_results"), "cluster_results")
     clusters = [
         validate_cluster(
@@ -458,6 +540,15 @@ def freeze_full(spec: dict[str, Any], output: str) -> dict[str, Any]:
     for item in [*commit_matrix, *surface_matrix]:
         if not set(item["scenarios"]).issubset(known):
             fail("matrix_unknown_scenario", "matrix references an unknown scenario")
+    gate_matrix = design_gate_matrix(
+        spec,
+        known,
+        {
+            scenario
+            for item in [*commit_matrix, *surface_matrix]
+            for scenario in item["scenarios"]
+        },
+    )
     outcomes = [
         scenario["outcome"] for cluster in clusters for scenario in cluster["scenarios"]
     ]
@@ -471,12 +562,15 @@ def freeze_full(spec: dict[str, Any], output: str) -> dict[str, Any]:
     record = {
         "schema": RECORD_SCHEMA,
         "version": text(spec.get("version"), "version"),
-        "previous_release": text(spec.get("previous_release"), "previous_release"),
+        "baseline_mode": spec["baseline_mode"],
+        "previous_release": spec["previous_release"],
         "baseline_sha": baseline,
         "candidate_sha": candidate,
         "candidate_tree": run_git(repo, "rev-parse", f"{candidate}^{{tree}}"),
         "evidence_root": str(root),
         "design_gate_state": text(spec.get("design_gate_state"), "design_gate_state"),
+        "active_design_gates": spec["active_design_gates"],
+        "design_gate_matrix": gate_matrix,
         "clusters": clusters,
         "commit_matrix": commit_matrix,
         "surface_matrix": surface_matrix,
@@ -502,12 +596,15 @@ def load_record(path: str) -> tuple[dict[str, Any], str]:
         {
             "schema",
             "version",
+            "baseline_mode",
             "previous_release",
             "baseline_sha",
             "candidate_sha",
             "candidate_tree",
             "evidence_root",
             "design_gate_state",
+            "active_design_gates",
+            "design_gate_matrix",
             "clusters",
             "commit_matrix",
             "surface_matrix",
@@ -516,6 +613,7 @@ def load_record(path: str) -> tuple[dict[str, Any], str]:
     )
     if Path(path).read_bytes() != canonical_bytes(record):
         fail("record_tampered", "record bytes are not canonical")
+    validate_baseline_identity(record)
     return record, digest(record)
 
 
@@ -523,7 +621,13 @@ def validate_record(repo: Path, path: str) -> tuple[dict[str, Any], str, Path]:
     record, record_digest = load_record(path)
     root = physical_evidence_root(record.get("evidence_root"))
     evidence_file(root, path, "full_record")
-    baseline = exact_commit(repo, record.get("baseline_sha"), "record.baseline_sha")
+    baseline = baseline_commit(
+        repo, record["baseline_mode"], record["previous_release"]
+    )
+    if baseline != record["baseline_sha"]:
+        fail(
+            "record_tampered", "record baseline no longer matches its release identity"
+        )
     candidate = exact_commit(repo, record.get("candidate_sha"), "record.candidate_sha")
     if run_git(repo, "rev-parse", f"{candidate}^{{tree}}") != record.get(
         "candidate_tree"
@@ -587,6 +691,15 @@ def validate_record(repo: Path, path: str) -> tuple[dict[str, Any], str, Path]:
         for item in [*commit_matrix, *surface_matrix]
     ):
         fail("record_tampered", "record matrix references an unknown scenario")
+    design_gate_matrix(
+        record,
+        known,
+        {
+            scenario
+            for item in [*commit_matrix, *surface_matrix]
+            for scenario in item["scenarios"]
+        },
+    )
     verdict = (
         "INCOMPLETE"
         if "gap" in outcomes
@@ -701,7 +814,12 @@ def prepare_confirmation(spec: dict[str, Any], output: str) -> dict[str, Any]:
     manifest = {
         "schema": MANIFEST_SCHEMA,
         "version": record["version"],
+        "baseline_mode": record["baseline_mode"],
         "previous_release": record["previous_release"],
+        "baseline_sha": record["baseline_sha"],
+        "design_gate_state": record["design_gate_state"],
+        "active_design_gates": record["active_design_gates"],
+        "design_gate_matrix": record["design_gate_matrix"],
         "full_candidate_sha": full_candidate,
         "candidate_sha": candidate,
         "remediation_commits": commits,
@@ -741,7 +859,12 @@ def load_confirmation(
         {
             "schema",
             "version",
+            "baseline_mode",
             "previous_release",
+            "baseline_sha",
+            "design_gate_state",
+            "active_design_gates",
+            "design_gate_matrix",
             "full_candidate_sha",
             "candidate_sha",
             "remediation_commits",
@@ -765,9 +888,18 @@ def load_confirmation(
         fail("inventory_mismatch", "manifest inventory differs from the frozen record")
     if manifest.get("confirmation_attempt") != 1:
         fail("attempt_invalid", "manifest must request confirmation attempt 1")
-    if manifest.get("version") != record.get("version") or manifest.get(
-        "previous_release"
-    ) != record.get("previous_release"):
+    if any(
+        manifest[field] != record[field]
+        for field in (
+            "version",
+            "baseline_mode",
+            "previous_release",
+            "baseline_sha",
+            "design_gate_state",
+            "active_design_gates",
+            "design_gate_matrix",
+        )
+    ):
         fail("manifest_mismatch", "manifest release identity differs from the record")
     if (
         Path(str(manifest.get("full_record"))).resolve()
@@ -849,7 +981,7 @@ def begin_confirmation(spec: dict[str, Any]) -> dict[str, Any]:
         "begin input",
         {"schema", "repository", "full_record", "manifest", "confirmation_root"},
     )
-    repo, _, record_digest, manifest, root = load_confirmation(spec)
+    repo, record, record_digest, manifest, root = load_confirmation(spec)
     candidate = manifest["candidate_sha"]
     clean_exact_main(repo, candidate)
     confirmation_root = physical_evidence_root(spec.get("confirmation_root"))
@@ -872,7 +1004,20 @@ def begin_confirmation(spec: dict[str, Any]) -> dict[str, Any]:
     claim_path = (
         root / f"confirmation-attempt-{record_digest.removeprefix('sha256:')}.json"
     )
+
+    def check_native_roots() -> None:
+        for cluster in record["clusters"]:
+            for scenario in cluster["scenarios"]:
+                for native_root in confirmation_native_roots(
+                    scenario["controlled_environment"],
+                    str(root),
+                    str(confirmation_root),
+                ).values():
+                    physical_evidence_root(native_root)
+
     try:
+        if not claim_path.exists() and not claim_path.is_symlink():
+            check_native_roots()
         create_once_write(claim_path, claim)
     except EvidenceError as error:
         if error.code == "output_exists":
@@ -897,6 +1042,7 @@ def begin_confirmation(spec: dict[str, Any]) -> dict[str, Any]:
                     "confirmation_already_started",
                     "the confirmation claim already has a settlement admission",
                 )
+            check_native_roots()
             return {
                 "schema": CLAIM_SCHEMA,
                 "path": str(claim_path),
@@ -984,11 +1130,7 @@ def load_claim(
 
 def snapshot_bytes(root: Path, value: Any, field: str) -> tuple[str, bytes]:
     path = evidence_file(root, value, field)
-    if Path(path).stat().st_size > MAX_JSON_BYTES:
-        fail("input_too_large", f"{field} exceeds {MAX_JSON_BYTES} bytes")
     raw = Path(path).read_bytes()
-    if len(raw) > MAX_JSON_BYTES:
-        fail("input_too_large", f"{field} exceeds {MAX_JSON_BYTES} bytes")
     return path, raw
 
 
@@ -1256,6 +1398,69 @@ def validate_settlement(
     return settlement_outcome(record, manifest, confirmation_root, cluster_values)
 
 
+def confirmation_native_roots(
+    environment: dict[str, Any], full_root: str, confirmation_root: str
+) -> dict[str, str]:
+    roots = string_list(
+        environment.get("native_helper_roots", []),
+        "native_helper_roots",
+        nonempty=False,
+    )
+    bindings = {}
+    for root in roots:
+        path = Path(root)
+        if (
+            path.as_posix() != root
+            or path.parent != Path(confirmation_root).parent
+            or not path.name.startswith("release-qa.")
+        ):
+            fail(
+                "evidence_root_invalid",
+                "native helper roots must name physical /tmp/release-qa.* directories",
+            )
+        if root != full_root:
+            name = "release-qa.native-" + digest([confirmation_root, root])[7:]
+            fresh = str(Path(confirmation_root).with_name(name))
+            if fresh in roots or fresh == full_root:
+                fail("evidence_root_invalid", "native helper roots must be fresh")
+            bindings[root] = fresh
+    return bindings
+
+
+def confirmation_environment(
+    value: dict[str, Any],
+    full_root: str,
+    confirmation_root: str,
+    previous_candidate: str,
+    candidate: str,
+) -> Any:
+    bindings = {full_root: confirmation_root}
+    bindings.update(confirmation_native_roots(value, full_root, confirmation_root))
+
+    def rebind(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {
+                key: candidate
+                if key == "source_sha" and child == previous_candidate
+                else rebind(child)
+                for key, child in item.items()
+            }
+        if isinstance(item, list):
+            return [rebind(child) for child in item]
+        if isinstance(item, str):
+            for old_root, fresh_root in bindings.items():
+                if item == old_root or item.startswith(old_root + "/"):
+                    if ".." in Path(item).parts or Path(item).as_posix() != item:
+                        fail(
+                            "confirmation_inventory_mismatch",
+                            "frozen fixture path must be normalized beneath its evidence root",
+                        )
+                    return fresh_root + item[len(old_root) :]
+        return item
+
+    return rebind(value)
+
+
 def settlement_outcome(
     record: dict[str, Any],
     manifest: dict[str, Any],
@@ -1289,13 +1494,28 @@ def settlement_outcome(
             )
         for frozen in expected["scenarios"]:
             fresh = actual_by_id[frozen["id"]]
+            for native_root in confirmation_native_roots(
+                frozen["controlled_environment"],
+                record["evidence_root"],
+                str(confirmation_root),
+            ).values():
+                physical_evidence_root(native_root)
             for field in (
                 "sources",
                 "procedure",
                 "controlled_environment",
                 "expected",
             ):
-                if fresh[field] != frozen[field]:
+                expected_value = frozen[field]
+                if field == "controlled_environment":
+                    expected_value = confirmation_environment(
+                        expected_value,
+                        record["evidence_root"],
+                        str(confirmation_root),
+                        record["candidate_sha"],
+                        manifest["candidate_sha"],
+                    )
+                if fresh[field] != expected_value:
                     fail(
                         "confirmation_inventory_mismatch",
                         f"confirmation changed frozen scenario field: {field}",

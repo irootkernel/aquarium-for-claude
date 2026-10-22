@@ -8,13 +8,24 @@ disable-model-invocation: true
 
 > **Claude Code delegation:** when this skill, or a reference or Procedure node it follows, hands a step to another Aquarium skill — however it phrases the hand-off, and whether it writes `/aquarium:<name>` or names the skill bare — read that skill's `SKILL.md` in full from this plugin (`../<name>/SKILL.md` from this skill's directory) and follow it as the delegated step instead of calling the Skill tool. Claude Code reserves most Aquarium skills for the user to type: it refuses the Skill tool for them and, once it has refused, forbids carrying out their workflow any other way. When you hand such a step to a subagent, put that file's absolute path in its assignment and have it read the file, because a subagent cannot load a gated skill through the Skill tool. Running another skill's bundled script is not a hand-off. A continuation request, routed repair, offer, or recommendation that the text has you return or report to the user is not a delegation: name its slash command, do not run it yourself, and stop where the text stops.
 
-Create a PRD and initial roadmap for one new project. Do not implement code, initialize Git, stage, commit, or publish.
+Read [commit-attribution.md](../../references/commit-attribution.md) for message formatting and change origins, within this skill's existing effect boundaries.
 
-Always read [evidence-residency.md](../../references/evidence-residency.md), then read [ouroboros-integration.md](../../references/ouroboros-integration.md), [documentation-governance.md](../../references/documentation-governance.md), and [epic-execution-sot.md](../../references/epic-execution-sot.md). For a Git-backed project, use the default `aquarium-design-v2` Podway path. For a non-Git project, skip Podway completely without skipping the evidence-residency contract.
+Create a PRD and initial roadmap for one new project. Do not implement code, initialize Git, or publish. Staging and committing approved documents require the separate delivery-input boundary in the shared integration contract.
 
-Establish the project identity, users, problem, outcomes, exclusions, constraints, risks, dependencies, delivery slices, acceptance evidence, and implementation ownership. Use installed upstream `/ouroboros:interview` and `/ouroboros:pm` only after the approved execution envelope.
+Always read [evidence-residency.md](../../references/evidence-residency.md), then read [ouroboros-integration.md](../../references/ouroboros-integration.md), [documentation-governance.md](../../references/documentation-governance.md), and [epic-execution-sot.md](../../references/epic-execution-sot.md). For a Git-backed project, follow [adaptive Design execution](../../references/adaptive-execution.md#design-entrypoints). For a non-Git project, skip Podway completely without skipping the evidence-residency contract.
+
+Establish the project identity, users, problem, outcomes, exclusions, constraints, risks, dependencies, delivery slices, acceptance evidence, and implementation ownership. Use installed upstream `/ouroboros:interview` and `/ouroboros:pm` only after the approved execution envelope. Before `/ouroboros:pm`, apply the shared [PM file and clipboard boundary](../../references/ouroboros-integration.md#pm-files-and-clipboard): disclose draft writes and obtain authority to replace the clipboard.
 
 Select `single-scope` when one implementation owner has one roadmap. Select `multi-scope` when independently delivered surfaces need separate roadmaps; ask only when ownership remains ambiguous. Produce a user-facing root README, maintainer-facing `docs/README.md`, a PRD, one initial roadmap per delivery scope, and every role index including operations. Apply the shared execution-SOT threshold to each initial epic and create its scope-local dossier only when required.
+
+Create this initial documentation set without declaring directory-guide adoption
+or creating directory `AGENTS.md` files. The
+[directory agent guidance contract](../../references/directory-agent-guidance.md)
+assigns later explicit adoption to `/aquarium:docs-setup`, which records approved
+coverage in the existing documentation index. If implementation does not yet
+exist, adoption declares scope without inventing directories or guides; later
+authorized feature delivery maintains guidance within that coverage. Root agent
+rules remain with `/aquarium:dev-setup`.
 
 The PRD owns product intent; each created dossier owns temporary implementation scope and acceptance until closeout. Use the shared default `EPIC-NNN` and per-roadmap `TASK-NNN` contract. Do not add a repository-local Aquarium state file or documentation validator.
 
@@ -23,3 +34,17 @@ Include a testing-foundation work unit that establishes `aquarium-test-contract/
 Record the tasks that establish the prerequisites and the evidence required to accept them in the roadmap. Make subsequent feature expansion depend on the testing-foundation work unit. Planning documents alone do not satisfy those dependencies. Keep tests needed to verify the preceding implementation in its own tasks. A new project is not eligible for a legacy waiver.
 
 Run upstream `/ouroboros:qa` on the draft, adjudicate every issue, then present the exact paths and complete proposed diff. Apply documents only after explicit approval and snapshot recheck. Report resulting paths, validation, unresolved decisions, and the exact next explicit skill; do not begin delivery.
+
+Apply the shared QA outcome mapping and [delivery-input commit boundary](../../references/ouroboros-integration.md#commit-approved-delivery-input). Report whether documents are applied or committed before naming the next explicit workflow.
+
+## Ordinary native orchestration
+
+Follow [Design and diagnosis orchestration](../../references/design-diagnosis-orchestration.md) for ordinary v3 native assignments, grouped independent assessments, original evidence and recovery. Preserve this skill's original leaf, exact approval and effect boundaries. No native history, role snapshot or configuration qualification is required. Existing formal snapshots retain their original contracts; source updates do not authorize managed-file rollout.
+
+For an authorized non-Git invocation, use the same Executor/Evaluator evidence and
+exact document approval with Podway explicitly inapplicable. Preserve the
+existing prohibition on implicit Git or Podway initialization.
+
+## Adaptive Design execution
+
+Before Podway discovery or source preparation, branch on explicit Podway opt-out and, for `new-project`, non-Git scope. Continue the original ordinary Executor/Evaluator and document approval workflow with Podway inapplicable; do not initialize Git or Podway. On the native path, follow [adaptive Design execution](../../references/adaptive-execution.md#design-entrypoints) for actual fit, exact admission and same-session recovery. Prefer adequate unchanged Design sources and preserve their first due grouped assessment. Keep this entrypoint's artifacts, upstream leaves, selected reviews and effect authority.

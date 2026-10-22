@@ -14,7 +14,7 @@ The repository root `README.md` is the user-facing product entrypoint. It explai
 - `implementation-tips` contains non-normative guidance for changing, testing, or releasing the implementation.
 - `ops` owns environment setup, deployment, configuration, operation, diagnosis, recovery, and first-aid runbooks for real development or service environments.
 - `roadmap` alone owns adopted epic and task identity, ordering, dependencies, lifecycle vocabulary, and current status.
-- `todo` owns future epic-sized candidates and any temporary development dossiers that the repository or an Aquarium design workflow establishes for adopted epics.
+- `todo` owns future epic-sized candidates and any temporary development dossiers that the repository or an Aquarium design workflow establishes for adopted epics or standing-group tasks.
 - `deferred-feedback` owns small actionable findings intentionally postponed from current work.
 
 Promote an oversized deferred finding to one TODO candidate or an adopted roadmap work unit. Do not let TODO or deferred feedback become a second status authority. Keep generated documentation, runtime logs, provider reports, temporary plans, and ignored workflow evidence outside these canonical roles.
@@ -32,6 +32,14 @@ Use `multi-scope` when independently delivered surfaces such as server, app, and
 Use `legacy-adopt` when existing paths or identifiers are already authoritative and moving them is not approved. Map every existing path to exactly one semantic role in the root documentation index, report missing or competing owners, and preserve established valid identifiers. Adoption is not migration.
 
 The root `docs/README.md` is the human-readable documentation index. It records the selected profile, delivery scopes, role-to-path ownership, canonical roadmap paths, roadmap identity contract, source-of-truth precedence, language, and repository-native documentation checks. It is documentation authority, not Aquarium state. Do not create `.aquarium`, a hidden selector, a generated mirror, or another project-state manifest.
+
+The [directory agent guidance contract](directory-agent-guidance.md) owns scoped
+canonical-document links, explicit adoption coverage and later maintenance.
+Record approved coverage in this existing documentation index. Root guidance
+belongs to `dev-setup`; directory adoption and documentation migration belong to
+`docs-setup`. Initial documentation creation by `new-project` does not adopt
+directory guides. Preserve actual code-adjacent and legacy authorities rather
+than copying their content into guides or forcing their relocation.
 
 ## Optional Work Dossiers
 

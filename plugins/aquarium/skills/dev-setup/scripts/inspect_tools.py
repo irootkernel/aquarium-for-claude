@@ -11,12 +11,15 @@ import os
 import platform
 import re
 import shutil
+import sqlite3
 import stat
 import subprocess
 import sys
 import time
+from contextlib import closing
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 try:
     import yaml
@@ -25,13 +28,13 @@ except ModuleNotFoundError as error:
         raise
     yaml = None  # type: ignore[assignment]
 
-SCHEMA_VERSION = "aquarium-dev-setup-inspection.v21"
+SCHEMA_VERSION = "aquarium-dev-setup-inspection.v23"
 DOLGORAE_INVOCATION_ID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
-MULGAE_MINIMUM_VERSION = (0, 1, 23)
+MULGAE_MINIMUM_VERSION = (0, 1, 25)
 MULGAE_NATIVE_CONTRACT: dict[str, Any] = {
-    "minimum_command_schema": 12,
+    "minimum_command_schema": 19,
     "minimum_doctor_schema": 5,
     "provider_compatibility_fields": (
         "cli_compatible",
@@ -39,10 +42,8 @@ MULGAE_NATIVE_CONTRACT: dict[str, Any] = {
     ),
 }
 MULGAE_MCP_TOOL_TIMEOUT_SEC = 7501
-GAORI_MCP_TOOL_TIMEOUT_SEC = 3601
 MAX_COMMAND_TIMEOUT_SECONDS = 86_400.0
-PODWAY_DAEMON_WAIT_SECONDS = 120.0
-PODWAY_DAEMON_CALLER_TIMEOUT_SECONDS = 125.0
+PODWAY_MINIMUM_VERSION = (0, 2, 14)
 CONFLICT_STATUSES = {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}
 CANONICAL_NUMERIC_COMPONENT = r"(?:0|[1-9][0-9]*)"
 CANONICAL_SEMVER = re.compile(
@@ -79,9 +80,12 @@ MULGAE_SKILL_FILES = (
     "references/lifecycle.md",
     "references/authoring.md",
     "references/recovery.md",
+    "references/legacy.md",
+    "references/verified-reads.md",
 )
 PODWAY_SKILL_FILES = (
     "SKILL.md",
+    "references/delegation.md",
     "references/lifecycle.md",
     "references/goal.md",
     "references/recovery.md",
@@ -109,6 +113,157 @@ SORAGE_DOCTOR_CATALOG = (
     "git.state",
     "platform.tcc",
 )
+
+
+def sorage_upgrade_preflight_state(command_cwd: Path) -> str:
+    """Read the native database schema without opening a writable SQLite handle."""
+    override = os.environ.get("SORAGE_HOME")
+    selected_home = (
+        Path(override) if override and override.strip() else Path.home() / ".sorage"
+    )
+    home = (command_cwd / selected_home).absolute()
+    database = home / "state" / "sorage.sqlite3"
+    try:
+        if database.is_symlink():
+            return "unknown"
+        if not database.exists():
+            if home.is_symlink() and not home.exists():
+                return "unknown"
+            if not home.exists():
+                return "fresh"
+            if not home.is_dir():
+                return "unknown"
+            return "fresh" if next(home.iterdir(), None) is None else "missing_database"
+        wal = Path(f"{database}-wal")
+        shm = Path(f"{database}-shm")
+        if not database.is_file() or wal.is_symlink() or shm.is_symlink():
+            return "unknown"
+        if wal.exists() and not shm.exists():
+            return "unknown"
+        mode = "mode=ro" if wal.exists() else "mode=ro&immutable=1"
+        uri = f"file:{quote(str(database), safe='/')}?{mode}"
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
+            row = connection.execute(
+                "SELECT name FROM schema_migrations WHERE version = 7"
+            ).fetchone()
+            if row == ("project-memos-v1",):
+                return "migrated"
+            if row is not None:
+                return "unknown"
+            config_file = home / "config.yaml"
+            if yaml is None:
+                return "unknown"
+            if not config_file.is_file():
+                return "installation_recovery"
+            try:
+                config = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, yaml.YAMLError):
+                return "installation_recovery"
+            installation_id = (
+                config.get("installationId") if isinstance(config, dict) else None
+            )
+            if not isinstance(installation_id, str) or not re.fullmatch(
+                r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}",
+                installation_id,
+            ):
+                return "installation_recovery"
+            vault = config.get("vault")
+            vault_path = vault.get("path") if isinstance(vault, dict) else None
+            if not isinstance(vault_path, str) or not vault_path:
+                return "installation_recovery"
+            if vault_path == "~/.sorage":
+                vault_directory = home
+            elif vault_path.startswith("~/.sorage/"):
+                vault_directory = home / vault_path.removeprefix("~/.sorage/")
+            elif vault_path == "~":
+                vault_directory = Path.home()
+            elif vault_path.startswith("~/"):
+                vault_directory = Path.home() / vault_path[2:]
+            else:
+                vault_directory = command_cwd / vault_path
+            marker_file = vault_directory / ".sorage-vault.json"
+            try:
+                marker = json.loads(marker_file.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                return "installation_recovery"
+            if (
+                not isinstance(marker, dict)
+                or marker.get("type") != "sorage-vault"
+                or marker.get("installationId") != installation_id
+                or type(marker.get("schemaVersion")) is not int
+                or marker["schemaVersion"] < 1
+                or not isinstance(marker.get("createdAt"), str)
+                or not marker["createdAt"]
+            ):
+                return "installation_recovery"
+            if marker["schemaVersion"] > 1:
+                return "unknown"
+            installed = connection.execute(
+                "SELECT installation_id FROM installation WHERE id = 1"
+            ).fetchone()
+            if installed is not None and installed[0] != installation_id:
+                return "installation_recovery"
+            bindings = connection.execute(
+                "SELECT DISTINCT installation_id FROM project_bindings"
+            ).fetchall()
+            if any(binding[0] != installation_id for binding in bindings):
+                return "installation_recovery"
+            return "pre_memo"
+    except (OSError, RuntimeError, sqlite3.Error):
+        return "unknown"
+
+
+def sorage_upgrade_skip_reason(state: str, preflight_complete: bool) -> str | None:
+    if state in {"fresh", "migrated"}:
+        return None
+    if state == "pre_memo":
+        return (
+            "upgrade_migration_required"
+            if preflight_complete
+            else "upgrade_preflight_required"
+        )
+    if state in {"missing_database", "installation_recovery"}:
+        return "installation_recovery_required"
+    return "upgrade_state_unverifiable"
+
+
+def sorage_validated_pre_memo_state(state: str, probe: dict[str, Any]) -> str:
+    if state != "pre_memo":
+        return state
+    result = probe.get("result")
+    if (
+        probe.get("ok")
+        and isinstance(result, dict)
+        and result.get("ok") is True
+        and isinstance(result.get("data"), dict)
+        and result["data"].get("valid") is True
+    ):
+        return state
+    error = result.get("error") if isinstance(result, dict) else None
+    if isinstance(error, dict) and error.get("code") in {
+        "CONFIG_INVALID",
+        "NOT_INITIALIZED",
+    }:
+        return "installation_recovery"
+    return "unknown"
+
+
+def sorage_config_validation_probe(
+    executable: str, command_cwd: Path, timeout_seconds: float
+) -> dict[str, Any]:
+    raw = run_command(
+        [executable, "config", "validate", "--json"], command_cwd, timeout_seconds
+    )
+    channel = raw["stdout"] if raw["ok"] else raw["stderr"]
+    if raw["exit_code"] is None or raw["timed_out"]:
+        return {"ok": False}
+    try:
+        result = strict_json_loads(channel)
+    except (json.JSONDecodeError, ValueError):
+        return {"ok": False}
+    return {"ok": raw["ok"], "result": result}
+
+
 HUMANIZER_SKILL_FILES = (
     "SKILL.md",
     "LICENSE",
@@ -142,6 +297,20 @@ PODWAY_PROCEDURES = (
 )
 PODWAY_PRIOR_CANONICAL_SHA256 = {
     "aquarium-task-v2.yaml": {
+        "42c10cab6c412c5a63c8ebfde3f91e46b838ba999825989bb0c5bd7e64f4ee3f",
+        "79a1430528934d2941551432703a68be28047bc3e8095bc52acf24c7a057466f",
+        "90c8e7df6a20f8b27134be4a3507db49af4de23b5506cd7a2bfe9ae2a2836731",
+        "c1a4271f89beb98f90d0280ccd42c68350fc778262a1eb24385ea171205c5541",
+        "9a4aae4994333dea3b719bb8439bd453c2665146b16cae495e26b858136658f3",
+        "6f5ff6992aeca1a9cb6fcf28ca39d3dc2b778f087ec6016b5720b652d865ebbe",
+        "aea7cb5b93fbaaf0bcd94de2d981621afd1f547fcecd370649a8d2e6fb2f4ea6",
+        "529c046037db1d3d0ec72a6e5829cca5e777be7e8d4058cac0dd498c18715042",
+        "9034dc4a36ce991cc75ee5b4f8f1a15f21649e435651621acc5463ad8a9b0efc",
+        "44992bc7e1efc048b2041e448bcdbc3dcedb3d1f70815b1ac379404a6c830e39",
+        "bc5ab9bcb7b7aa665280e41819ad84465be41777c04d4e8c6bf8daf5a4a6c895",
+        "087555f42fd748066fce3820f32436cbd048ce78b79f440c570a8f0ac3bd1838",
+        "d56c421dd964f3aa83279da879245042f8135e9792af7171b9e49ecfd0cc6339",
+        "6a76bbc00cc8fca87a26acbfe00688c0302addef06a8494f875b2e6bd6e032d9",
         "27758a88c1c2c0e696bb5e14d68f37c6588215a5ea6f1ee85fef7dcd3de991aa",
         "aa916a0e0dfa49384da1bb1affede4af58dd4dbc43e17f248d69537db6aeda52",
         "76fbe6842b178524d8c19ce17a58d1eb1fffa13dac07e9a9ae57fe98474194a6",
@@ -161,6 +330,21 @@ PODWAY_PRIOR_CANONICAL_SHA256 = {
         "865c6c6a6c4e7784e296d16bf261fd125524d773329f3344cc63cfc7b7e12d63",
     },
     "aquarium-goal-v2.yaml": {
+        "28a5db7b520372b5b97685c1c9f9a8503e0680f530a016a3a4857645c1d56d3f",
+        "99ae1a42372ec91c8de98cfc61e99c1defc4c99615610bd598c57418c01ea9b5",
+        "8ae119c01a94dae12b02ff17ddee6aab90f377aadd0bc3bb08e701861e87f0cc",
+        "e22e244ad35dc856ddc93837fa46094aa7a6812af2996a7204da0db2360ba58a",
+        "21a988ceb6c741f97711624323732143a1a1f13bb43010ec0289dc0341898e95",
+        "f286964245e92c7fbedd9aa6d187a8afba3253f63c81c434d9fcd003683a292f",
+        "5f8d17becb9b673365cb01614a5ab9563b3c459ded93da60d18990eaa70e73b9",
+        "430c5423c1ddea224561970e7e5ba5c6d1b7c62c03887e9eee888e6c648a4635",
+        "f4ad2b0e66be4f141c73ff8c325c494c212dba269be499dfddca26b47540e0e2",
+        "99048bb6dba1e44446f986cb7afe0704aa05fb71177ad3cc3950aa781979506a",
+        "46ada0b0482a86ad71c09d5a5cf35c8e47f025584b87af0d4d1444b84953c0de",
+        "c17020907a437817b8a3c139a510e1cecf73b7f23e82240a58adb9a8c32aff39",
+        "0bdb966f8ee054a0312c536edbf42e6d81f0a6da35d8cd6bac4d3e13f1e0c2d7",
+        "a7b1d024de777e5535e71fa86d1bb23ce31ff69ffec1e0be20829a88ae3b2b94",
+        "a022cef14eb4f9112336c6dc20d35ebeb0abf7f08d586fc148353cb75a0d5986",
         "b215c60ad2555d9d7f4f970fb80541278b340e93536ff32ce3ea656fadf21c4d",
         "99dfe92a75accee69717154a13ea18b6e25a493e2674d78543f3780b8993a375",
         "2921280e4a57e02896efb126abbd56829b6a2c99867d357ecc98413aadd15b7b",
@@ -179,6 +363,21 @@ PODWAY_PRIOR_CANONICAL_SHA256 = {
         "67b2faa3736b4e1a9c8264c20d39968c6f47e6e194d73ae8f49044f7561d154f",
     },
     "aquarium-validation-v2.yaml": {
+        "e2eeb06b55b33abf48d2acae96eee675ffb57daf580280a8db1c1e5d66e26c93",
+        "23ce1dff7afe24fc3e2aa0438db6e9c3b7a162f1e131061181018d5ec80a769a",
+        "aa9bc9da3445c795af71bcc9f558977ec9e53fa48391335dbc3a493159eabba6",
+        "71734334901b2f83788b5b87df6f1bc0506ee315ffaa423174c08e25f1d02d0c",
+        "0a5713f79a0dae3a5c39a44956ba112bda21ffe02ee0e55af55286d67b87a106",
+        "acf7498f908955a8f61632c70d57667e792d4989521f70686086e08f29879a52",
+        "a9b225b36bddbdd2e44cd0d37b9ed5967f59b222fa182bed91ab7698a46896e1",
+        "cb5cad2c4d29f72f365b7a4f95274f9cfe9d1cf112154daf529b0c4efdae5867",
+        "75d083e2812ea3cdee6774970bf5a2335607903468cb7c7554834c05d2a30e6c",
+        "c036abf9ef161b2e8a52e8dbd5e88f8565d1010dd9becfcfa33fd54d4b72d29e",
+        "16ccd090b0cf02ecb0420b6b58c5e8af14c56cc77e6407114d69a40e36ed7c50",
+        "e8048c5146a1d4ec17ca4811f6b76fa82d316bbe682b4198155b42d83586774f",
+        "0c040e6f0bd70c169b22a58a3930ec9287879a84d44a907c8ce6e5297c9966b1",
+        "17e76602d597a761720f44341de8ab33508be6dfe4bbe8ba3eaa395ea6ef9f97",
+        "78e14eff9899b2507b4a5a6f91c5353e84da792f284eb127bfe30cb8c37235e9",
         "a9d59ad628e77a0f3131b4dcb9bb40fc3d83bb4c35ec077666caf4379c49a7a0",
         "d3108415bc54a96c200a1189149c514428f53367eae3778c4440d23f8b55a800",
         "2d1e9995216ac4fcdf3b08baba80a31662485fc4daa3f0bfd42e4f1ff2f4c788",
@@ -195,18 +394,36 @@ PODWAY_PRIOR_CANONICAL_SHA256 = {
         "170f0eb407c03c590f7f56314287c684ba2bd083c3e1f47831a14bf5eabe4647",
     },
     "aquarium-design-v2.yaml": {
+        "3ca2e4d6bd7506033a575eada996a15853334ec5e9570b86894e7ded28e94a08",
+        "932f0f1e9625a029c3d5a553ce82bd37856a57e119e612c9bd1e966cb488ccd0",
+        "d7c6dd3a2cff72bd80f85a5bc0a0e015ad0e027bffe64b01c073560913b8475a",
+        "2c01c3665e555b947d4098d19a79abbc4129daa1ce1d53427325c3e76a553bb3",
+        "0765991ad1fd1e3398c8ab07e8c852be0593c69efc65a89f9107caead5f04f43",
+        "3003bd1afb18d43c4f3d636572b78db5b911171e0eeb6add4b1bc2c7014511ae",
+        "15afa90fbf532baf8cfc5c3bd25d0aa8dc6e64a0b2b262e03dac1c4f25af580c",
+        "0f24c740ab09d4668036b26ca0958b705b35d3eb8e73fdab77553245f1a6a624",
+        "3ec77c9593427753d51b21a12c2c067554aff751f4dbc2632dada0762853dc58",
         "4ec653b2b4d740d77bcd4826f40288d9fadd7d696a3939c197b9789dbba824b6",
         "7582829afbb5c188c349e8f57c486a8de5eae2327e331680d7ccc09e1c6ecda8",
     },
     "aquarium-war-room-v2.yaml": {
+        "07e0f59d3681b37584199ba94bb37a3c0d0ead7f527b1af934cac0202f13dcc9",
+        "e370766f3ef8e057b818eca42e2757844950b4536a3d7ac8c41624154ec41cd2",
+        "0a52672bec69ead2b733b44a860bbf60c3b0028e0c8f1faf6d5827cbc0035ead",
+        "5bd3bd87eb508961d654eb66e5c210b647681d1a61e33c37fd3ae2a8d97ea65e",
+        "3866de3ecc6b101f7ac10933221f711964dd3a9a77030f3c90baf3dd739fb4f6",
+        "2a665a79048c7a4bb239ba348d77fc8d578e0edf82d50d301bae7843f48a18a8",
+        "96b5972a45e8288539e63972cd34f1a1868f334f5b60f494d3105fb0ea8d2436",
+        "d151627d3f4dc4d58b9ac35ad9dc67f627bbf39b6f475a3817458fc926adb8ad",
+        "422f063e6aa126cdb49590e1565f0927f07a70b4d7f02c574d5bebb9839bcd2b",
         "ca9f2363107b315e829ba9f0357d35cbc242d07fbbf5a4702868bbb781dee1cb",
         "c8ce6585a735eb3a159a6f14f40d3dd413cc33812b254e10703c76b3d49dddd9",
     },
 }
 
 # Current handler compatibility is derived from the canonical Procedure structure.
-# Prior canonical digests remain admitted above so immutable session snapshots keep
-# their established compatibility without weakening current structural checks.
+# Prior canonical digests identify preserved source snapshots; current handler
+# readiness separately checks the required branches and acceptance evidence.
 LEGACY_PODWAY_PROCEDURES = (
     "root-kernel-task-v2.yaml",
     "root-kernel-goal-v2.yaml",
@@ -415,10 +632,7 @@ def codex_version_from_output(output: str) -> str | None:
 
 
 def supported_podway_version(version: str | None) -> bool:
-    if not version:
-        return False
-    match = re.fullmatch(rf"v?0\.2\.({CANONICAL_NUMERIC_COMPONENT})", version)
-    return bool(match and int(match.group(1)) >= 11)
+    return supported_stable_version(version, PODWAY_MINIMUM_VERSION)
 
 
 def podway_v025_workaround_bytes(name: str, source: bytes) -> bytes | None:
@@ -531,15 +745,56 @@ def podway_handler_shape_reasons(
     return reasons
 
 
+def inspect_podway_review_routes(
+    content: bytes | None, *, qualified: bool = False
+) -> dict[str, str]:
+    """Qualify current routes from every review-route declaration in the snapshot."""
+    routes = ("mulgae", "herdr", "subagent-review", "waived")
+    unverified = dict.fromkeys(routes, "unverified")
+    if content is None or yaml is None or not qualified:
+        return unverified
+    try:
+        document = yaml.safe_load(content)
+    except (UnicodeDecodeError, yaml.YAMLError):
+        return unverified
+    if not isinstance(document, dict):
+        return unverified
+    definitions = document.get("node_definitions")
+    if not isinstance(definitions, dict):
+        return unverified
+    declarations = []
+    for definition in definitions.values():
+        if not isinstance(definition, dict):
+            return unverified
+        items = definition.get("items", [])
+        if not isinstance(items, list):
+            return unverified
+        for item in items:
+            if not isinstance(item, dict):
+                return unverified
+            if item.get("id") != "review-route":
+                continue
+            choices = item.get("choices")
+            if (
+                item.get("type") != "choice"
+                or not isinstance(choices, list)
+                or not choices
+                or not all(isinstance(choice, str) for choice in choices)
+            ):
+                return unverified
+            declarations.append(set(choices))
+    if not declarations:
+        return unverified
+    supported = set.intersection(*declarations)
+    return {route: "ready" if route in supported else "unavailable" for route in routes}
+
+
 def inspect_podway_handler_contract(
     name: str, content: bytes | None, canonical_content: bytes | None
 ) -> tuple[str, list[str]]:
     """Check only the structural Procedure surface consumed by Aquarium handlers."""
     if content is None:
         return "not_checked", ["procedure_bytes_unavailable"]
-    content_digest = hashlib.sha256(content).hexdigest()
-    if content_digest in PODWAY_PRIOR_CANONICAL_SHA256.get(name, set()):
-        return "compatible", []
     if yaml is None:
         return "not_checked", ["pyyaml_unavailable"]
     try:
@@ -594,6 +849,7 @@ def inspect_podway_handler_contract(
         "check_results": {},
         "routes": {},
         "evidence": {},
+        "delegation": {},
     }
     for definition_id, definition in canonical_definitions.items():
         if not isinstance(definition_id, str) or not isinstance(definition, dict):
@@ -627,6 +883,8 @@ def inspect_podway_handler_contract(
         if not isinstance(node, dict) or not isinstance(node.get("id"), str):
             continue
         node_id = node["id"]
+        if "delegation" in node:
+            contract["delegation"][node_id] = node["delegation"]
         routes = node.get("routes")
         if isinstance(routes, dict) and routes:
             contract["routes"][node_id] = {
@@ -643,6 +901,12 @@ def inspect_podway_handler_contract(
                 for item in (entry.get("items") or [None])
             }
     reasons: list[str] = []
+    for node_id in sorted(contract["nodes"]):
+        node = nodes.get(node_id)
+        if isinstance(node, dict) and node.get("delegation") != contract[
+            "delegation"
+        ].get(node_id):
+            reasons.append(f"incompatible_delegation:{node_id}")
     missing_nodes = sorted(contract.get("nodes", set()) - nodes.keys())
     if missing_nodes:
         reasons.append("missing_required_nodes:" + ",".join(missing_nodes))
@@ -762,11 +1026,31 @@ def inspect_podway_handler_contract(
     return "compatible", []
 
 
+def podway_delegated_placements(content: bytes | None) -> list[str] | None:
+    if content is None or yaml is None:
+        return None
+    try:
+        document = yaml.safe_load(content)
+    except (UnicodeDecodeError, yaml.YAMLError):
+        return None
+    graph = document.get("graph") if isinstance(document, dict) else None
+    nodes = graph.get("nodes") if isinstance(graph, dict) else None
+    if not isinstance(nodes, list):
+        return None
+    return [
+        node["id"]
+        for node in nodes
+        if isinstance(node, dict)
+        and isinstance(node.get("id"), str)
+        and "delegation" in node
+    ]
+
+
 def supported_sanho_version(version: str | None) -> bool:
     if not version:
         return False
     match = re.fullmatch(rf"v?0\.2\.({CANONICAL_NUMERIC_COMPONENT})", version)
-    return bool(match and int(match.group(1)) >= 8)
+    return bool(match and int(match.group(1)) >= 9)
 
 
 def supported_dolgorae_version(version: str | None) -> bool:
@@ -780,7 +1064,7 @@ def supported_gaori_version(version: str | None) -> bool:
     if not version:
         return False
     match = re.fullmatch(rf"v?0\.1\.({CANONICAL_NUMERIC_COMPONENT})", version)
-    return bool(match and int(match.group(1)) >= 17)
+    return bool(match and int(match.group(1)) >= 18)
 
 
 def canonical_numeric_components_at_least(
@@ -822,7 +1106,7 @@ def supported_sorage_version(version: str | None) -> bool:
     if not version:
         return False
     match = re.fullmatch(rf"v?0\.1\.({CANONICAL_NUMERIC_COMPONENT})", version)
-    return bool(match and int(match.group(1)) >= 1)
+    return bool(match and int(match.group(1)) >= 2)
 
 
 def supported_mulgae_go_version(version: str | None) -> bool:
@@ -835,7 +1119,7 @@ def supported_mulgae_go_version(version: str | None) -> bool:
         version,
     )
     return bool(
-        match and canonical_numeric_components_at_least(match.groups(), (1, 26, 6))
+        match and canonical_numeric_components_at_least(match.groups(), (1, 27, 1))
     )
 
 
@@ -1620,15 +1904,30 @@ def normalize_podway_envelope(
     if not isinstance(envelope, dict):
         return normalized, None
     schema = envelope.get("schema")
-    if schema == "podway.error/v1":
+    if schema == "podway.error/v2":
+        normalized["ok"] = False
         code = envelope.get("code")
-        if code in {"SESSION_NOT_FOUND", "LEGACY_PROCEDURE_STATE_UNSUPPORTED"}:
+        if code in {
+            "SESSION_NOT_FOUND",
+            "LEGACY_RUNTIME_STATE_UNSUPPORTED",
+            "WORKSPACE_CONTRACT_MISMATCH",
+            "WORKSPACE_SCHEMA_UNSUPPORTED",
+            "WORKSPACE_STATE_UNREADABLE",
+            "WORKSPACE_CONFIG_INVALID",
+            "WORKSPACE_NOT_INITIALIZED",
+            "WORKSPACE_ID_CONFLICT",
+            "WORKSPACE_UUID_MISMATCH",
+            "WORKSPACE_BUSY",
+            "WORKSPACE_MAINTENANCE",
+            "COMMAND_RETIRED",
+            "REQUEST_INVALID",
+        }:
             normalized["error_code"] = code
         else:
             normalized["error_code"] = "unrecognized_podway_error"
         normalized["output_schema"] = schema
         return normalized, None
-    if schema != "podway.output/v3":
+    if schema != "podway.output/v4":
         normalized["ok"] = False
         normalized["error_code"] = "unexpected_output_schema"
         return normalized, None
@@ -1652,153 +1951,45 @@ def normalize_podway_envelope(
     return normalized, payload
 
 
-def normalize_podway_daemon_probe(
-    daemon_probe: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    normalized, payload = normalize_podway_envelope(
-        daemon_probe,
-        "daemon.wait-ready",
-        ("podway.daemon-status-result/v3",),
+def normalize_podway_identity(
+    probe: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    normalized, identity = normalize_podway_envelope(
+        probe, "version", ("podway.version-result/v2",)
     )
-    daemon: dict[str, Any] = {
-        "installed": False,
-        "loaded": False,
-        "reachable": False,
-        "running": False,
-        "version": None,
-        "target": None,
-        "ready": False,
-        "mode": None,
-        "readiness_state": None,
-        "readiness_stage": None,
-        "readiness_elapsed_ms": None,
-        "worktree_recovery": None,
-    }
-    if not isinstance(payload, dict):
-        return normalized, daemon
-
-    observed_version = payload.get("daemon_version")
-    if isinstance(observed_version, str) and re.fullmatch(
-        r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", observed_version
-    ):
-        daemon["version"] = observed_version
-    observed_target = payload.get("target")
-    if observed_target in {"aarch64-apple-darwin", "x86_64-apple-darwin"}:
-        daemon["target"] = observed_target
-    daemon.update(
-        {
-            "installed": payload.get("installed") is True,
-            "loaded": payload.get("loaded") is True,
-            "reachable": payload.get("reachable") is True,
-            "running": payload.get("status") == "running",
+    if identity is None or not normalized["ok"]:
+        return normalized, None
+    source = identity.get("source_commit")
+    valid = bool(
+        set(identity)
+        == {
+            "schema",
+            "product",
+            "version",
+            "target",
+            "build_identity",
+            "source_commit",
+            "contract_manifest_schema",
+            "contract_manifest_digest",
         }
+        and identity.get("product") == "podway"
+        and isinstance(identity.get("version"), str)
+        and len(identity["version"]) <= 64
+        and supported_podway_version(identity["version"])
+        and identity.get("target") == "aarch64-apple-darwin"
+        and identity.get("contract_manifest_schema") == "podway.contract-manifest/v2"
+        and all(
+            isinstance(identity.get(field), str)
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", identity[field])
+            for field in ("build_identity", "contract_manifest_digest")
+        )
+        and (source is None or isinstance(source, str) and 1 <= len(source) <= 64)
     )
-
-    observed_mode = payload.get("mode")
-    daemon["mode"] = (
-        observed_mode
-        if isinstance(observed_mode, str)
-        and len(observed_mode.encode("utf-8")) <= 64
-        and re.fullmatch(r"[a-z](?:[a-z0-9]|-(?=[a-z0-9]))*", observed_mode)
-        else None
-    )
-    observed_state = payload.get("readiness_state")
-    if observed_state in {
-        "not_running",
-        "unreachable",
-        "starting",
-        "recovering",
-        "ready",
-        "failed",
-    }:
-        daemon["readiness_state"] = observed_state
-    observed_stage = payload.get("readiness_stage")
-    if observed_stage in {
-        "endpoint",
-        "registry",
-        "workspaces",
-        "jobs",
-        "ready",
-        "failed",
-    }:
-        daemon["readiness_stage"] = observed_stage
-    observed_elapsed = payload.get("readiness_elapsed_ms")
-    if (
-        isinstance(observed_elapsed, int)
-        and not isinstance(observed_elapsed, bool)
-        and observed_elapsed >= 0
-    ):
-        daemon["readiness_elapsed_ms"] = observed_elapsed
-    observed_recovery = payload.get("worktree_recovery")
-    if isinstance(observed_recovery, dict):
-        recovery = {
-            key: observed_recovery.get(key) for key in ("total", "completed", "failed")
-        }
-        if all(
-            isinstance(value, int)
-            and not isinstance(value, bool)
-            and 0 <= value <= 10_000
-            for value in recovery.values()
-        ):
-            daemon["worktree_recovery"] = recovery
-
-    observed_clients = payload.get("in_flight_client_count")
-    observed_maintenance = payload.get("maintenance_operation_count")
-    activity_valid = bool(
-        (
-            observed_clients is None
-            or isinstance(observed_clients, int)
-            and not isinstance(observed_clients, bool)
-            and 0 <= observed_clients <= 1024
-        )
-        and (
-            observed_maintenance is None
-            or isinstance(observed_maintenance, int)
-            and not isinstance(observed_maintenance, bool)
-            and 0 <= observed_maintenance <= 10_000
-        )
-    )
-    if daemon["readiness_state"] in {"not_running", "unreachable"}:
-        contract_valid = bool(
-            daemon["mode"] == "prod"
-            and observed_stage is None
-            and observed_elapsed is None
-            and observed_recovery is None
-            and observed_clients is None
-            and observed_maintenance is None
-        )
-    else:
-        contract_valid = bool(
-            daemon["mode"] == "prod"
-            and daemon["readiness_state"] is not None
-            and daemon["readiness_stage"] is not None
-            and daemon["readiness_elapsed_ms"] is not None
-            and daemon["worktree_recovery"] is not None
-            and activity_valid
-        )
-    if not contract_valid:
+    if not valid:
         normalized["ok"] = False
-        normalized["error_code"] = (
-            "unsupported_daemon_mode"
-            if daemon["mode"] is not None and daemon["mode"] != "prod"
-            else "invalid_daemon_readiness"
-        )
-    recovery = daemon["worktree_recovery"]
-    daemon["ready"] = bool(
-        contract_valid
-        and daemon["reachable"]
-        and daemon["running"]
-        and daemon["readiness_state"] == "ready"
-        and daemon["readiness_stage"] == "ready"
-        and isinstance(recovery, dict)
-        and recovery["completed"] == recovery["total"]
-    )
-    normalized["result"] = {
-        **daemon,
-        "version_valid": daemon["version"] is not None,
-        "target_supported": daemon["target"] is not None,
-    }
-    return normalized, daemon
+        normalized["error_code"] = "invalid_podway_identity"
+        return normalized, None
+    return normalized, identity
 
 
 def inspect_sanho(
@@ -2497,7 +2688,7 @@ def inspect_mulgae_installation_prerequisites(
             "installed": go_executable is not None,
             "version": None,
             "supported": False,
-            "minimum": "go1.26.6",
+            "minimum": "go1.27.1",
         }
     }
     if not go_executable:
@@ -2812,6 +3003,27 @@ def effective_mcp_registration(
     return selected["status"], selected_scope, selected.get("reason")
 
 
+def assess_requested_mcp_scope(
+    registration: dict[str, Any], requested_scope: str
+) -> dict[str, Any]:
+    effective_scope = registration["effective_scope"]
+    if requested_scope == "none":
+        return {"status": "not_requested", "effective_scope": effective_scope}
+    if effective_scope == "unverifiable":
+        status = "unverifiable"
+    elif effective_scope != requested_scope:
+        status = "scope_mismatch"
+    elif registration["status"] == "configured":
+        status = "ready"
+    else:
+        status = "registration_degraded"
+    return {
+        "status": status,
+        "requested_scope": requested_scope,
+        "effective_scope": effective_scope,
+    }
+
+
 def claude_configuration_path() -> Path:
     """Return the Claude Code user configuration that holds MCP registrations.
 
@@ -3102,6 +3314,7 @@ def inspect_mulgae(
     repository: Path,
     timeout_seconds: float,
     require_mcp: bool = False,
+    expected_mcp_scope: str | None = None,
     agent_skill: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     tool = base_tool("mulgae")
@@ -3126,7 +3339,6 @@ def inspect_mulgae(
             timeout_seconds,
             ".mulgae/runtime/example",
         ),
-        mulgae_configuration_entry(repository, ".mulgaeignore", timeout_seconds),
         configuration_entry(repository, ".mcp.json", timeout_seconds),
     ]
     tool["mcp_registration"] = inspect_mulgae_mcp(
@@ -3280,7 +3492,7 @@ def inspect_mulgae(
         and configured_readiness.get("exit_code") == 0
     )
     mcp_status = tool["mcp_registration"]["status"]
-    mcp_blocks = mcp_status == "degraded" or (
+    mcp_blocks = (expected_mcp_scope != "none" and mcp_status == "degraded") or (
         require_mcp and mcp_status != "configured"
     )
     if (
@@ -3309,6 +3521,7 @@ def inspect_sorage(
     timeout_seconds: float,
     include_readiness: bool = False,
     agent_skill: dict[str, Any] | None = None,
+    upgrade_preflight_complete: bool = False,
 ) -> dict[str, Any]:
     tool = base_tool("sorage")
     tool["version_supported"] = False
@@ -3378,6 +3591,23 @@ def inspect_sorage(
     if not include_readiness:
         tool["probes"]["doctor"] = skipped_probe("not_requested")
         tool["probes"]["project_resolve"] = skipped_probe("not_requested")
+        tool["initialization_status"] = "not_inspected"
+        tool["project_registration"]["status"] = "not_inspected"
+        tool["readiness_status"] = "not_inspected"
+        return tool
+
+    upgrade_state = sorage_upgrade_preflight_state(repository)
+    if upgrade_state == "pre_memo":
+        upgrade_state = sorage_validated_pre_memo_state(
+            upgrade_state,
+            sorage_config_validation_probe(
+                tool["executable"], repository, timeout_seconds
+            ),
+        )
+    reason = sorage_upgrade_skip_reason(upgrade_state, upgrade_preflight_complete)
+    if reason is not None:
+        tool["probes"]["doctor"] = skipped_probe(reason)
+        tool["probes"]["project_resolve"] = skipped_probe(reason)
         tool["initialization_status"] = "not_inspected"
         tool["project_registration"]["status"] = "not_inspected"
         tool["readiness_status"] = "not_inspected"
@@ -3516,8 +3746,7 @@ def classify_gaori_mcp_scope(
         and arguments_match
         and cwd_unbound
         and binary_matches
-        and finite_number(tool_timeout)
-        and tool_timeout >= GAORI_MCP_TOOL_TIMEOUT_SEC
+        and (tool_timeout is None or (finite_number(tool_timeout) and tool_timeout > 0))
     ):
         registration["status"] = "configured"
     else:
@@ -4141,8 +4370,12 @@ def inspect_podway(
     repository: Path,
     timeout_seconds: float,
     agent_skill: dict[str, Any] | None = None,
+    executable: str | None = None,
 ) -> dict[str, Any]:
     tool = base_tool("podway")
+    if executable is not None:
+        tool["executable"] = executable
+        tool["installed"] = True
     tool["agent_skill"] = (
         agent_skill
         if agent_skill is not None
@@ -4155,6 +4388,7 @@ def inspect_podway(
         and platform.machine() in {"arm64", "aarch64"},
     }
     managed: list[dict[str, Any]] = []
+    review_route_bytes: dict[str, bytes | None] = {}
     legacy_managed: list[dict[str, Any]] = []
     present_count = 0
     legacy_present_count = 0
@@ -4171,6 +4405,12 @@ def inspect_podway(
         target_digest = file_sha256(target) if present else None
         source_bytes = file_bytes(source) if source_present else None
         target_bytes = file_bytes(target) if present else None
+        if name in {
+            "aquarium-task-v2.yaml",
+            "aquarium-goal-v2.yaml",
+            "aquarium-validation-v2.yaml",
+        }:
+            review_route_bytes[relative_path] = target_bytes
         matching = (
             present
             and not symlinked
@@ -4225,6 +4465,12 @@ def inspect_podway(
                 "expected_procedure_id": Path(name).stem,
                 "handler_contract_status": handler_contract_status,
                 "handler_contract_reasons": handler_contract_reasons,
+                "delegated_placements": podway_delegated_placements(target_bytes),
+                "review_route_readiness": (
+                    inspect_podway_review_routes(None)
+                    if relative_path in review_route_bytes
+                    else {}
+                ),
             }
         )
     for name in LEGACY_PODWAY_PROCEDURES:
@@ -4250,6 +4496,7 @@ def inspect_podway(
     tool["legacy_managed_procedures"] = legacy_managed
     tool["migration_kinds"] = {
         "product_rename": legacy_present_count > 0,
+        "runtime_contract": False,
     }
     tool["migration_required"] = any(tool["migration_kinds"].values())
     tool["readiness_status"] = (
@@ -4259,14 +4506,19 @@ def inspect_podway(
     )
     tool["legacy_state_detected"] = False
     tool["version_supported"] = False
-    tool["daemon_version"] = None
-    tool["versions_match"] = False
+    tool["identity"] = None
+    tool["runtime_readiness"] = {
+        "state": "unavailable",
+        "session_procedure": None,
+        "session_lifecycle": None,
+        "session_contract_supported": None,
+    }
     if not tool["installed"]:
         for entry in managed:
             if entry["source_state"] in {"canonical", "pending_validation"}:
                 entry["source_state"] = "unverifiable"
         tool["probes"]["version"] = skipped_probe("executable_missing")
-        tool["probes"]["daemon_status"] = skipped_probe("executable_missing")
+        tool["probes"]["identity"] = skipped_probe("executable_missing")
         tool["probes"]["doctor"] = skipped_probe("executable_missing")
         tool["probes"]["session_status"] = skipped_probe("executable_missing")
         if present_count or legacy_present_count:
@@ -4280,32 +4532,30 @@ def inspect_podway(
     tool["version"] = version_from_probe(version_probe)
     tool["version_supported"] = supported_podway_version(tool["version"])
 
-    daemon_probe = json_probe(
-        [
-            tool["executable"],
-            "--json",
-            "daemon",
-            "wait-ready",
-            "--timeout",
-            f"{PODWAY_DAEMON_WAIT_SECONDS:g}s",
-        ],
-        repository,
-        max(timeout_seconds, PODWAY_DAEMON_CALLER_TIMEOUT_SECONDS),
+    identity_probe = (
+        json_probe(
+            [tool["executable"], "--json", "version", "--identity"],
+            repository,
+            timeout_seconds,
+        )
+        if tool["version_supported"]
+        else skipped_probe("unsupported_version")
     )
-    normalized_daemon, daemon = normalize_podway_daemon_probe(daemon_probe)
-    daemon_version = daemon["version"]
-    daemon_ready = daemon["ready"]
-    daemon_target = daemon["target"]
-    tool["probes"]["daemon_status"] = normalized_daemon
-    tool["daemon_version"] = daemon_version
-    tool["versions_match"] = (
-        normalized_version(tool["version"]) == normalized_version(daemon_version)
-        if tool["version"] and daemon_version
-        else False
+    normalized_identity, identity = normalize_podway_identity(identity_probe)
+    tool["probes"]["identity"] = normalized_identity
+    tool["identity"] = identity
+    identity_ok = bool(
+        normalized_identity["ok"]
+        and identity is not None
+        and normalized_version(identity["version"])
+        == normalized_version(tool["version"])
     )
 
     initialized = tool["configuration"][0]["present"]
     session_contract_ok = True
+    native_session_contract_ok = True
+    native_session_procedure = None
+    native_session_lifecycle = None
     if initialized:
         doctor_probe = json_probe(
             [tool["executable"], "doctor", "--json"], repository, timeout_seconds
@@ -4319,18 +4569,28 @@ def inspect_podway(
         normalized_session, session_result = normalize_podway_envelope(
             session_probe,
             "session.status",
-            ("podway.status-result/v3", "podway.compact-status-result/v3"),
+            (
+                "podway.status-result/v5",
+                "podway.compact-status-result/v5",
+            ),
         )
         if isinstance(doctor_payload, dict) and isinstance(
             doctor_payload.get("healthy"), bool
         ):
             normalized_doctor["result"] = {"healthy": doctor_payload["healthy"]}
         session_payload_valid = False
+        native_session_payload_valid = False
         if isinstance(session_result, dict):
             procedure = session_result.get("procedure")
             session = session_result.get("session")
             current = session_result.get("current")
             node = current.get("node") if isinstance(current, dict) else None
+            delegation = session_result.get("delegation")
+            delegation_valid = delegation is None or (
+                isinstance(delegation, dict)
+                and isinstance(delegation.get("state"), str)
+                and bool(delegation["state"])
+            )
             normalized_session["result"] = {
                 "procedure_present": isinstance(procedure, dict),
                 "procedure_schema_valid": isinstance(procedure, dict)
@@ -4342,8 +4602,9 @@ def inspect_podway(
                 "session_present": isinstance(session, dict),
                 "session_lifecycle": session.get("lifecycle")
                 if isinstance(session, dict)
+                and isinstance(session.get("lifecycle"), str)
                 and session.get("lifecycle")
-                in {"prepared", "running", "completed", "cancelled", "discarded"}
+                in {"prepared", "running", "completed", "cancelled"}
                 else None,
                 "session_revision": session.get("revision")
                 if isinstance(session, dict)
@@ -4354,12 +4615,15 @@ def inspect_podway(
                 and isinstance(node.get("graph_node_id"), str),
             }
             allowed_procedure_ids = {Path(name).stem for name in PODWAY_PROCEDURES}
-            session_payload_valid = bool(
-                isinstance(procedure, dict)
+            native_session_payload_valid = bool(
+                delegation_valid
+                and isinstance(procedure, dict)
                 and procedure.get("schema") == "podway.procedure/v2"
-                and procedure.get("id") in allowed_procedure_ids
+                and isinstance(procedure.get("id"), str)
+                and re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", procedure["id"])
+                and len(procedure["id"]) <= 64
                 and isinstance(procedure.get("version"), str)
-                and re.fullmatch(r"\d+", procedure["version"])
+                and 1 <= len(procedure["version"]) <= 64
                 and isinstance(procedure.get("digest"), str)
                 and re.fullmatch(r"sha256:[0-9A-Za-z._-]{1,128}", procedure["digest"])
                 and isinstance(session, dict)
@@ -4369,18 +4633,37 @@ def inspect_podway(
                     session["id"],
                     re.IGNORECASE,
                 )
+                and isinstance(session.get("lifecycle"), str)
                 and session.get("lifecycle")
-                in {"prepared", "running", "completed", "cancelled", "discarded"}
+                in {"prepared", "running", "completed", "cancelled"}
                 and isinstance(session.get("revision"), int)
                 and not isinstance(session.get("revision"), bool)
             )
+            session_payload_valid = native_session_payload_valid and (
+                procedure["id"] in allowed_procedure_ids
+                and re.fullmatch(r"\d+", procedure["version"]) is not None
+            )
+            if native_session_payload_valid:
+                native_session_procedure = {
+                    field: procedure[field] for field in ("id", "version", "digest")
+                }
+                native_session_lifecycle = session["lifecycle"]
         tool["probes"]["doctor"] = normalized_doctor
         tool["probes"]["session_status"] = normalized_session
         session_contract_ok = (
             normalized_session["ok"] and session_payload_valid
         ) or normalized_session.get("error_code") == "SESSION_NOT_FOUND"
+        native_session_contract_ok = (
+            normalized_session["ok"] and native_session_payload_valid
+        ) or normalized_session.get("error_code") == "SESSION_NOT_FOUND"
+        tool["migration_kinds"]["runtime_contract"] = any(
+            probe.get("error_code")
+            in {"LEGACY_RUNTIME_STATE_UNSUPPORTED", "WORKSPACE_CONTRACT_MISMATCH"}
+            for probe in (normalized_doctor, normalized_session)
+        )
+        tool["migration_required"] = any(tool["migration_kinds"].values())
         tool["legacy_state_detected"] = any(
-            probe.get("error_code") == "LEGACY_PROCEDURE_STATE_UNSUPPORTED"
+            probe.get("error_code") == "LEGACY_RUNTIME_STATE_UNSUPPORTED"
             for probe in (normalized_doctor, normalized_session)
         )
     else:
@@ -4433,7 +4716,11 @@ def inspect_podway(
             normalized_preview, preview_payload = normalize_podway_envelope(
                 preview,
                 "procedure.preview",
-                ("podway.procedure-preview-result/v1",),
+                (
+                    "podway.procedure-preview-result/v2"
+                    if entry["delegated_placements"]
+                    else "podway.procedure-preview-result/v1",
+                ),
             )
             entry["preview"] = normalized_preview
             if isinstance(preview_payload, dict):
@@ -4444,12 +4731,21 @@ def inspect_podway(
                 entry["preview"]["procedure_id"] = (
                     procedure_id if isinstance(procedure_id, str) else None
                 )
+                if entry["delegated_placements"] and (
+                    preview_payload.get("delegated_placements")
+                    != entry["delegated_placements"]
+                    or preview_payload.get("delegated_placement_count")
+                    != len(entry["delegated_placements"])
+                ):
+                    normalized_preview["ok"] = False
+                    normalized_preview["error_code"] = "incompatible_delegated_preview"
             preview_valid = (
                 normalized_preview["ok"]
                 and isinstance(preview_payload, dict)
                 and preview_payload.get("admissible") is True
                 and preview_payload.get("procedure_id")
                 == entry["expected_procedure_id"]
+                and entry["delegated_placements"] is not None
             )
         check_rejected = isinstance(payload, dict) and payload.get("valid") is False
         preview_rejected = isinstance(preview_payload, dict) and (
@@ -4481,20 +4777,36 @@ def inspect_podway(
         version_probe["ok"]
         and tool["version_supported"]
         and tool["platform"]["supported"]
-        and normalized_daemon["ok"]
-        and daemon_ready
-        and daemon_target == "aarch64-apple-darwin"
-        and tool["versions_match"]
+        and identity_ok
         and doctor_ok
         and session_contract_ok
     )
+    tool["runtime_readiness"] = {
+        "state": "ready"
+        if initialized
+        and version_probe["ok"]
+        and tool["version_supported"]
+        and tool["platform"]["supported"]
+        and identity_ok
+        and doctor_ok
+        and native_session_contract_ok
+        else "degraded",
+        "session_procedure": native_session_procedure,
+        "session_lifecycle": native_session_lifecycle,
+        "session_contract_supported": native_session_contract_ok
+        if initialized
+        else None,
+    }
     if present_count == 0:
         tool["status"] = "installed" if healthy else "degraded"
     elif (
         valid_managed_count == len(PODWAY_PROCEDURES)
         and tracked_count == len(PODWAY_PROCEDURES)
-        and initialized
-        and tool["configuration"][1]["present"]
+        and all(
+            entry["present"]
+            and tracked_by_git(repository, entry["path"], timeout_seconds)
+            for entry in tool["configuration"][:2]
+        )
         and healthy
         and legacy_present_count == 0
     ):
@@ -4503,7 +4815,173 @@ def inspect_podway(
     else:
         tool["readiness_status"] = "degraded"
         tool["status"] = "degraded"
+    for entry in managed:
+        if entry["path"] in review_route_bytes:
+            entry["review_route_readiness"] = inspect_podway_review_routes(
+                review_route_bytes[entry["path"]],
+                qualified=tool["readiness_status"] == "ready",
+            )
     return tool
+
+
+def inspect_selected_podway(
+    repository,
+    timeout_seconds,
+    *,
+    source=None,
+    roots=(),
+    entrypoint=None,
+    route=None,
+    resume=False,
+    bootstrap=None,
+    customization_basis=None,
+    executable=None,
+    binding_path=None,
+    qualification=None,
+):
+    """Inspect only selected Podway capabilities; keep broad library diagnostics."""
+    shared = Path(__file__).resolve().parents[3] / "shared"
+    sys.path.insert(0, str(shared))
+    try:
+        from adaptive_admission import NativeClient, selected_session, selected_source
+        from adaptive_bundles import BundleError
+
+        if qualification is not None:
+            __import__("adaptive_suitability")
+            from adaptive_execution import invocation_assignment
+
+            try:
+                invocation_assignment(qualification)
+            except BundleError as error:
+                return {
+                    "schema_version": SCHEMA_VERSION,
+                    "selected_procedure": {"status": error.code, "message": str(error)},
+                    "tools": {},
+                }
+    except ModuleNotFoundError as error:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "selected_procedure": {
+                "status": "missing-prerequisite",
+                "dependency": error.name,
+                "interpreter": sys.executable,
+            },
+            "tools": {},
+        }
+    finally:
+        sys.path.remove(str(shared))
+    tool = (
+        inspect_podway(repository, timeout_seconds, executable=executable)
+        if executable is not None
+        else inspect_podway(repository, timeout_seconds)
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "repository": repository_inventory(repository, timeout_seconds),
+        "inspection_scope": "selected-podway",
+        "tools": {"podway": tool},
+    }
+    runtime = tool["runtime_readiness"]
+    client = NativeClient(repository, tool.get("executable"), timeout_seconds)
+    try:
+        if runtime["state"] != "ready":
+            raise BundleError(
+                "runtime-unavailable",
+                "Native CLI/workspace/session health is not established",
+                {
+                    "runtime_readiness": runtime,
+                    "probes": {
+                        name: tool.get("probes", {}).get(name)
+                        for name in ("version", "identity", "doctor", "session_status")
+                    },
+                    "migration_kinds": tool.get("migration_kinds", {}),
+                    "identity": tool.get("identity"),
+                    "version_supported": tool.get("version_supported"),
+                    "platform": tool.get("platform"),
+                },
+            )
+        if resume:
+            if runtime.get("session_procedure") is None:
+                raise BundleError(
+                    "missing-session", "There is no selected native session to resume"
+                )
+            admission = selected_session(
+                repository,
+                runtime["session_procedure"],
+                roots=roots,
+                entrypoint=entrypoint,
+                route=route,
+                client=client,
+                bootstrap=bootstrap,
+                qualification=qualification,
+            )
+            source = str(Path(admission["retention"]["path"]) / "procedure.yaml")
+        else:
+            admission = selected_source(
+                repository,
+                Path(source),
+                roots=roots,
+                entrypoint=entrypoint,
+                route=route,
+                runtime_ready=True,
+                client=client,
+                binding_path=binding_path,
+                qualification=qualification,
+            )
+        family = admission["binding"]["family"]
+        adopted = [
+            entry
+            for entry in tool["managed_procedures"]
+            if entry["update_explanation"] == "local_customization"
+            and (
+                Path(entry["path"]).stem
+                == "aquarium-"
+                + ("war-room" if family == "diagnosis" else family)
+                + "-v2"
+            )
+        ]
+        if adopted and not customization_basis and not resume:
+            raise BundleError(
+                "not-established",
+                "Selected alternative needs the existing envelope's adopted-customization obligation disposition",
+            )
+        procedure = runtime.get("session_procedure")
+        key = admission["binding"]["procedure"]
+        conflict = procedure is not None and any(
+            procedure[field] != key[field] for field in ("id", "version", "digest")
+        )
+        result["selected_procedure"] = {
+            "status": "session-conflict" if conflict else "ready",
+            "source": str(source),
+            "binding": admission["binding"],
+            "retention_status": admission["retention"]["status"],
+            "retention": {
+                field: admission["retention"][field]
+                for field in ("status", "diagnostics", "aliases")
+            },
+            "session": {
+                "state": runtime.get("session_lifecycle")
+                if procedure is not None
+                else "none",
+                "procedure": procedure,
+                "definition_conflict": conflict,
+                "work_identity_reconciliation_required": procedure is not None,
+            },
+            "session_mode": "selected-resume" if resume else "source-inspection",
+            "adopted_customizations": adopted,
+            "customization_basis": customization_basis,
+            "provider_readiness": "owned-by-selected-review-route",
+            "work_identity_reconciliation_required": procedure is not None,
+            "interpreter": sys.executable,
+        }
+    except (BundleError, ValueError) as error:
+        result["selected_procedure"] = {
+            "status": getattr(error, "code", "corrupt"),
+            "message": str(error),
+            "interpreter": sys.executable,
+            "details": getattr(error, "details", {}),
+        }
+    return result
 
 
 def inspect(
@@ -4511,7 +4989,10 @@ def inspect(
     timeout_seconds: float,
     include_podway: bool = False,
     include_sorage: bool = False,
+    sorage_upgrade_preflight_complete: bool = False,
     require_mulgae_mcp: bool = False,
+    expected_mulgae_mcp: str | None = None,
+    expected_gaori_mcp: str | None = None,
 ) -> dict[str, Any]:
     repository = resolve_repository(requested_path, timeout_seconds)
     trusted_root = skill_roots()[0]
@@ -4546,6 +5027,7 @@ def inspect(
             repository,
             timeout_seconds,
             require_mcp=require_mulgae_mcp,
+            expected_mcp_scope=expected_mulgae_mcp,
             agent_skill=trusted_global_skills.get("use-mulgae"),
         ),
         "gaori": inspect_gaori(
@@ -4558,6 +5040,7 @@ def inspect(
             timeout_seconds,
             include_readiness=include_sorage,
             agent_skill=trusted_global_skills.get("use-sorage"),
+            upgrade_preflight_complete=sorage_upgrade_preflight_complete,
         ),
     }
     if include_podway:
@@ -4566,11 +5049,20 @@ def inspect(
             timeout_seconds,
             agent_skill=trusted_global_skills["use-podway"],
         )
+    requested_mcp = {
+        name: assess_requested_mcp_scope(tools[name]["mcp_registration"], scope)
+        for name, scope in (
+            ("mulgae", expected_mulgae_mcp),
+            ("gaori", expected_gaori_mcp),
+        )
+        if scope is not None
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "repository": repository_inventory(repository, timeout_seconds),
         "trusted_global_skills": trusted_global_skills,
         "tools": tools,
+        **({"requested_mcp": requested_mcp} if requested_mcp else {}),
     }
 
 
@@ -4591,6 +5083,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Include explicitly selected Sorage readiness diagnostics",
     )
     parser.add_argument(
+        "--sorage-upgrade-preflight-complete",
+        action="store_true",
+        help="Confirm that the selected pre-Memo Sorage installation passed backup and restore preflight",
+    )
+    parser.add_argument(
         "--include-podway",
         action="store_true",
         help="Include explicitly requested Podway readiness diagnostics",
@@ -4600,7 +5097,80 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Require an explicitly selected Mulgae MCP registration for status",
     )
+    parser.add_argument("--expected-mulgae-mcp", choices=("global", "local", "none"))
+    parser.add_argument("--expected-gaori-mcp", choices=("global", "local", "none"))
+    selected = parser.add_mutually_exclusive_group()
+    selected.add_argument(
+        "--selected-podway-source",
+        help="Inspect one explicit selected Procedure without other provider probes",
+    )
+    selected.add_argument(
+        "--resume-selected-podway",
+        action="store_true",
+        help="Resolve the existing selected session by its native tuple",
+    )
+    parser.add_argument(
+        "--podway-root",
+        action="append",
+        default=[],
+        help="One approved searched Procedure root; supply every root",
+    )
+    parser.add_argument(
+        "--podway-entrypoint",
+        choices=(
+            "task-handler",
+            "epic-handler",
+            "epic-validator",
+            "new-feature",
+            "new-project",
+            "refactor",
+            "war-room",
+        ),
+    )
+    parser.add_argument(
+        "--podway-review-route",
+        choices=("mulgae", "herdr", "subagent-review", "waived"),
+    )
+    parser.add_argument(
+        "--podway-bootstrap",
+        help="Additional selected binding locator to cross-check on resume",
+    )
+    parser.add_argument(
+        "--podway-customization-basis",
+        help="Existing approved envelope's adopted-customization obligation disposition",
+    )
+    parser.add_argument(
+        "--podway-binding", help="Exact selected adaptive binding JSON path"
+    )
+    parser.add_argument(
+        "--podway-qualification",
+        help="Ordinary assignment/assessment context JSON path",
+    )
     arguments = parser.parse_args()
+    if arguments.selected_podway_source or arguments.resume_selected_podway:
+        if not arguments.podway_root or not arguments.podway_entrypoint:
+            raise InspectionError(
+                "invalid_arguments",
+                "Selected admission needs all approved --podway-root values and --podway-entrypoint",
+            )
+    elif (
+        arguments.podway_root
+        or arguments.podway_entrypoint
+        or arguments.podway_review_route
+        or arguments.podway_bootstrap
+        or arguments.podway_customization_basis
+        or arguments.podway_binding
+        or arguments.podway_qualification
+    ):
+        raise InspectionError(
+            "invalid_arguments",
+            "Selected-source arguments require selected admission or resume",
+        )
+    if arguments.sorage_upgrade_preflight_complete and not arguments.include_sorage:
+        raise InspectionError(
+            "invalid_arguments",
+            "--sorage-upgrade-preflight-complete requires --include-sorage",
+        )
     if (
         not math.isfinite(arguments.timeout_seconds)
         or arguments.timeout_seconds <= 0
@@ -4621,13 +5191,36 @@ def emit(payload: dict[str, Any]) -> None:
 def main() -> int:
     try:
         arguments = parse_arguments()
+        if arguments.selected_podway_source or arguments.resume_selected_podway:
+            result = inspect_selected_podway(
+                resolve_repository(arguments.repository, arguments.timeout_seconds),
+                arguments.timeout_seconds,
+                source=arguments.selected_podway_source,
+                roots=arguments.podway_root,
+                entrypoint=arguments.podway_entrypoint,
+                route=arguments.podway_review_route,
+                resume=arguments.resume_selected_podway,
+                bootstrap=arguments.podway_bootstrap,
+                customization_basis=arguments.podway_customization_basis,
+                binding_path=arguments.podway_binding,
+                qualification=json.loads(
+                    Path(arguments.podway_qualification).read_text()
+                )
+                if arguments.podway_qualification
+                else None,
+            )
+            emit(result)
+            return 0 if result["selected_procedure"]["status"] == "ready" else 2
         emit(
             inspect(
                 arguments.repository,
                 arguments.timeout_seconds,
                 include_podway=arguments.include_podway,
                 include_sorage=arguments.include_sorage,
+                sorage_upgrade_preflight_complete=arguments.sorage_upgrade_preflight_complete,
                 require_mulgae_mcp=arguments.require_mulgae_mcp,
+                expected_mulgae_mcp=arguments.expected_mulgae_mcp,
+                expected_gaori_mcp=arguments.expected_gaori_mcp,
             )
         )
         return 0
