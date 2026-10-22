@@ -131,7 +131,7 @@ Before committing in a Sanho-managed repository, reference `/use-sanho` and foll
 
 ## Prepare the Commit Message
 
-Apply the shared attribution contract to the exact accepted candidate. Preserve the verified originating workflow, resolve the selected Task's parent Epic from the staged canonical roadmap, and show the complete subject, optional body, and single trailer block. Use `none` only for an established absence. A direct commit with no original Aquarium workflow records `aquarium:task-commit`.
+Apply the shared attribution contract to the exact accepted candidate. Preserve the verified originating workflow, resolve the selected Task's parent Epic from the staged canonical roadmap, and show the complete subject, optional body, and single trailer block. Use `none` only for an established absence. A direct commit with no original Aquarium workflow records `aquarium:task-commit`. Leave the `Co-Authored-By` model trailer that Claude Code's commit attribution adds by default out of the message, as the shared contract directs.
 
 Before executing the commit, parse the prepared message with `git interpret-trailers --parse` and require exactly one of each expected `Aquarium-Workflow`, `Aquarium-Epic`, and `Aquarium-Task` value. Keep all required evidence and native provenance in the same final block. Reject an unparsed, duplicate, conflicting, or stale field before committing; never add a commit just to record attribution.
 

@@ -648,6 +648,20 @@ SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
         "Evaluator without prior qualification, role snapshots or configuration digests.",
         "Use the Coordinator harness's supported native Executors and independent report-only Evaluator without prior qualification, role snapshots or configuration digests; on Claude Code, dispatch them as subagents with the `opus` model unless the user names another, as the [ordinary contract](ordinary-agent-orchestration.md) directs.",
     ),
+    # Claude Code's commit attribution appends `Co-Authored-By: <model>
+    # <noreply@anthropic.com>` by default. Upstream's attribution contract keeps
+    # model identities out of the commit message and requires one final trailer
+    # block, so Aquarium commits leave that trailer out unless the repository,
+    # the user, or managed settings require it, and the contract names the
+    # setting that turns it off for every commit.
+    (
+        "Respect repository restrictions on personal attribution such as `Co-Authored-By`.",
+        "Respect repository restrictions on personal attribution such as `Co-Authored-By`. Leave out the `Co-Authored-By: <model> <noreply@anthropic.com>` trailer that Claude Code's commit attribution adds by default unless repository or user instructions, or [managed settings](https://code.claude.com/docs/en/managed-settings), require it: it names the model or runtime that made the commit, which is a model or runtime identity rather than personal attribution, and neither belongs in the commit message. A user can stop Claude Code from adding it at all by setting [`attribution.commit`](https://code.claude.com/docs/en/settings-reference#attribution-commit) to an empty string.",
+    ),
+    (
+        "A direct commit with no original Aquarium workflow records `aquarium:task-commit`.",
+        "A direct commit with no original Aquarium workflow records `aquarium:task-commit`. Leave the `Co-Authored-By` model trailer that Claude Code's commit attribution adds by default out of the message, as the shared contract directs.",
+    ),
 )
 
 # Substitutions for bundled scripts, kept separate from Markdown because they
