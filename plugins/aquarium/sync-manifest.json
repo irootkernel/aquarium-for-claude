@@ -167,7 +167,7 @@
     "skills/release-qa/references/confirmation-bindings.md": "f68bd728b3f0d81b99a41356fab6841225fe105e0757c30104ad9a29ee5d3c06",
     "skills/release-qa/scripts/manage_release_qa.py": "dd16508a2fa4a74373eadd56ab3f93c63dd214236c197cba6c1c3c99eacd6343",
     "skills/subagent-review/SKILL.md": "dcdde34f031fed931e9be7a2c51653a26c7f308de48cdea995c92dc026b1f50d",
-    "skills/subagent-review/scripts/inspect_repository_state.py": "7e7a05df28d0ab1616f6acd18cb0bae44471858e44a5b34aab76e013104c7497",
+    "skills/subagent-review/scripts/inspect_repository_state.py": "08b59118b688f8a7a49c473049f71702e7cd75b2bb2f78209beff6f90e07f03b",
     "skills/subagent-review/scripts/inspect_review_target.py": "469642d34e622fda0bad2be650483cc1393a14471e7cdbd4bf5ca4c36c9c79d1",
     "skills/task-close/SKILL.md": "eae2e47a56f6d87314389fb4df68f9decaeca9c3ab8a50b80f1db906752444ce",
     "skills/task-commit/SKILL.md": "a2490afdf963cc0a22f25c19f6847e3e03eedd6a15021fbf4f7c5f61d7459897",
@@ -183,7 +183,7 @@
     "skills/test-setup/references/contract.md": "7c461015b91d174b496d60a8ea77c68dda6ab6599c4978906758f3557c5103f3",
     "skills/test-setup/references/profiles.md": "b5a5b39e74d3632a8d6c2b45c314e9a0136a1ac831711617fcaba29ae29e2b88",
     "skills/test-setup/scripts/inspect_testing.py": "b4f0ad6397f72c6675e41043f62ef4bdaa86c195726c7a7922798bc07018a089",
-    "skills/upgrade/SKILL.md": "df0a8c1cd020bbfb150ee2bb7d5e71d8aaa46c282f0555fecaed4c7dfd7c394c",
+    "skills/upgrade/SKILL.md": "700be9228b29c667ebdafd6983bce28734a69db6c4cd297c1de7dfd03775a940",
     "skills/upgrade/references/rederivation.md": "d588dbb1d5ad111674d026ee7341f96ef695f9027ce09974d12550bfc9ddd22b",
     "skills/war-room/SKILL.md": "614ba16df951cc1c8404df5ba9a00ed40ab5de3edf3a25b0ebae7d7473604aee"
   }

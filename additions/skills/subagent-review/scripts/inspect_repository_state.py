@@ -36,6 +36,13 @@ class JsonArgumentParser(argparse.ArgumentParser):
         raise InspectionError("invalid_arguments", "invalid command-line arguments")
 
 
+def decode_utf8(value: bytes, code: str, message: str) -> str:
+    try:
+        return value.decode("utf-8")
+    except UnicodeError as error:
+        raise InspectionError(code, message) from error
+
+
 def git_command(
     repository: Path, arguments: list[str]
 ) -> subprocess.CompletedProcess[bytes]:
@@ -48,8 +55,50 @@ def git_command(
         "GIT_OPTIONAL_LOCKS": "0",
         "GIT_PAGER": "cat",
     }
+    command = ["git", "-c", "core.fsmonitor=false", "-C", str(repository)]
+    # The repository's own configuration can name clean and process filters
+    # that Git runs while it compares the worktree with the index, so every
+    # filter key the repository defines, smudge keys included, is blanked
+    # through the environment before the inspection runs, as upstream's target
+    # inspector has done since v0.1.18; `required` is turned off so a blank
+    # driver is not an error. Reading configuration runs no filter.
+    config = subprocess.run(
+        [
+            *command,
+            "config",
+            "--null",
+            "--name-only",
+            "--get-regexp",
+            r"^filter\..*\.(clean|smudge|process|required)$",
+        ],
+        check=False,
+        capture_output=True,
+        env=environment,
+        timeout=30,
+    )
+    if config.returncode not in {0, 1}:
+        raise InspectionError(
+            "git_filter_config_failed", "Git filter configuration could not be read"
+        )
+    keys = sorted(
+        {
+            key
+            for key in decode_utf8(
+                config.stdout,
+                "git_filter_config_invalid",
+                "Git filter configuration is not valid UTF-8",
+            ).split("\0")
+            if key
+        }
+    )
+    environment["GIT_CONFIG_COUNT"] = str(len(keys))
+    for index, key in enumerate(keys):
+        environment[f"GIT_CONFIG_KEY_{index}"] = key
+        environment[f"GIT_CONFIG_VALUE_{index}"] = (
+            "false" if key.endswith(".required") else ""
+        )
     return subprocess.run(
-        ["git", "-c", "core.fsmonitor=false", "-C", str(repository), *arguments],
+        [*command, *arguments],
         check=False,
         capture_output=True,
         env=environment,
@@ -307,6 +356,12 @@ def snapshot(repository: Path) -> dict[str, Any]:
         "index_unavailable",
         "Git index is unavailable",
     )
+    # Submodules are left to `tracked_files_identity`, which reads their files
+    # directly and runs only filter-free plumbing inside each one through
+    # `git_command`, so it blanks that submodule's own filter keys. Letting the
+    # superproject's diff or status recurse would start Git inside every
+    # submodule with only the superproject's keys blanked, and a filter the
+    # submodule configures for itself would run.
     tracked_worktree = require_git(
         repository,
         [
@@ -314,7 +369,7 @@ def snapshot(repository: Path) -> dict[str, Any]:
             "--binary",
             "--no-ext-diff",
             "--no-textconv",
-            "--ignore-submodules=none",
+            "--ignore-submodules=all",
         ],
         "worktree_unavailable",
         "tracked worktree state is unavailable",
@@ -326,7 +381,7 @@ def snapshot(repository: Path) -> dict[str, Any]:
             "--porcelain=v2",
             "-z",
             "--untracked-files=all",
-            "--ignore-submodules=none",
+            "--ignore-submodules=all",
         ],
         "status_unavailable",
         "Git status is unavailable",

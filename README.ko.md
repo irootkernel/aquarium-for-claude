@@ -194,12 +194,12 @@ git add -A && git commit
 ```bash
 python3 scripts/sync.py --check
 ruby tests/validate.rb
-python3 -m unittest tests/test_claude_mcp_inspection.py
+python3 -m unittest discover -s tests -p "test_*.py"
 git diff --check
 claude plugin validate --strict plugins/aquarium
 ```
 
-`--check`는 임시 디렉터리로 다시 생성하고 커밋된 산출물이 표류했으면 실패합니다. Ruby 검증은 이 저장소가 책임지는 것만 다룹니다 — 업스트림 사이드카에 대한 호출 게이팅, 업스트림에서 온 모든 게이트된 스킬에만 있는 위임 안내, 호스트 중립적인 생성 텍스트, 커밋 훅의 Claude Code 계약, 번들 리뷰어의 프론트매터와 그것이 섬기는 Subagent Review 기준선, 바이트 단위로 동일한 Podway 절차와 그대로 복사된 `shared/`, `assets/adaptive/`, `assets/schemas/` 트리, `shared/`가 생성된 스크립트에서 import하는 이름, 매니페스트 합치, 의도적 제외, 컴파일되는 생성 스크립트, README의 오버라이드 표와 스킬 표, 그리고 마켓플레이스 형태입니다. 금지 니들 목록과 시길 예외는 각각 `scripts/sync.py`와 `tests/validate.rb` 사이에서 집합으로 비교됩니다. 가드는 더 좁은 쪽만큼만 넓고, 한쪽에만 더해진 항목은 건강하다고 보고하기 때문입니다. Python 테스트 35개는 이 저장소가 출하되는 검사기에 작성한 동작을 실행합니다 — Claude Code MCP 검사, 스킬 루트, 쓰기 스킬과 Ouroboros 탐침, 전역 검사기와 그 Sorage 사전 점검 바인딩, 그리고 PyYAML과 `jsonschema` 없이는 닫힌 채 실패하는 선택된 절차 전제 조건입니다. 산문 계약은 업스트림이 소유하고 자기 CI에서 검증합니다. 마지막 명령은 Claude Code 자체의 플러그인 검증기이며 CI가 아니라 로컬에서 실행됩니다.
+`--check`는 임시 디렉터리로 다시 생성하고 커밋된 산출물이 표류했으면 실패합니다. Ruby 검증은 이 저장소가 책임지는 것만 다룹니다 — 업스트림 사이드카에 대한 호출 게이팅, 업스트림에서 온 모든 게이트된 스킬에만 있는 위임 안내, 호스트 중립적인 생성 텍스트, 커밋 훅의 Claude Code 계약, 번들 리뷰어의 프론트매터와 그것이 섬기는 Subagent Review 기준선, 바이트 단위로 동일한 Podway 절차와 그대로 복사된 `shared/`, `assets/adaptive/`, `assets/schemas/` 트리, `shared/`가 생성된 스크립트에서 import하는 이름, 매니페스트 합치, 의도적 제외, 컴파일되는 생성 스크립트, README의 오버라이드 표와 스킬 표, 그리고 마켓플레이스 형태입니다. 금지 니들 목록과 시길 예외는 각각 `scripts/sync.py`와 `tests/validate.rb` 사이에서 집합으로 비교됩니다. 가드는 더 좁은 쪽만큼만 넓고, 한쪽에만 더해진 항목은 건강하다고 보고하기 때문입니다. 모든 `tests/test_*.py`에서 발견되는 Python 테스트 40개는 이 저장소가 출하되는 검사기에 작성한 동작을 실행합니다 — Claude Code MCP 검사, 스킬 루트, 쓰기 스킬과 Ouroboros 탐침, 전역 검사기와 그 Sorage 사전 점검 바인딩, PyYAML과 `jsonschema` 없이는 닫힌 채 실패하는 선택된 절차 전제 조건, 그리고 검사 대상 저장소나 그 서브모듈이 설정한 Git 필터를 결코 실행하지 않으면서 비교하는 모든 변경을 여전히 잡아내야 하는 저장소 상태 검사기입니다. 산문 계약은 업스트림이 소유하고 자기 CI에서 검증합니다. 마지막 명령은 Claude Code 자체의 플러그인 검증기이며 CI가 아니라 로컬에서 실행됩니다.
 
 ## 문서 스타일
 

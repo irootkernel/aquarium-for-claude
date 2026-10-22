@@ -68,7 +68,7 @@ When upstream changes behavior this edition adapts — the tool inspection surge
 
 ## Validate and Document
 
-1. Extend `tests/validate.rb` for any new invariant first, then run all five commands: `python3 scripts/sync.py --check`, `ruby tests/validate.rb`, `python3 -m unittest tests/test_claude_mcp_inspection.py`, `git diff --check`, and `claude plugin validate --strict plugins/aquarium`.
+1. Extend `tests/validate.rb` for any new invariant first, then run all five commands: `python3 scripts/sync.py --check`, `ruby tests/validate.rb`, `python3 -m unittest discover -s tests -p "test_*.py"`, `git diff --check`, and `claude plugin validate --strict plugins/aquarium`.
 2. Prove gating live: a `claude --plugin-dir plugins/aquarium -p` listing must show exactly the skills whose upstream sidecars allow implicit invocation, and no others. That set is upstream's to change from release to release, so read it from the sidecars rather than from a remembered count.
 3. Update `README.md` and `README.ko.md` together — the Skills table, the generation prose for any new rule or marker, and the overrides table when a divergence changed — and record shipped outcomes under the open `Unreleased` section of `CHANGELOG.md`.
 
