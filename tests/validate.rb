@@ -106,6 +106,41 @@ if UPSTREAM_PLUGIN.directory?
   assert(generated == expected, "generated skills do not match upstream minus exclusions plus additions: #{(generated - expected) | (expected - generated)}")
 end
 
+# --- invocations resolve to what ships -----------------------------------------
+
+# Upstream renames skills without aliases — v0.1.20 replaced `independent-review`
+# with `subagent-review` — and nothing else notices text that still names the
+# retired skill or agent: before the v0.1.21 adoption the bundled reviewer's
+# description and the catalog override both did. Every `/aquarium:<skill>` in
+# generated text must name a generated skill, and every bare `aquarium:<name>` a
+# generated skill or a shipped plugin agent; only upstream's own migration
+# history may name a retired skill, and each such allowance must still occur.
+HISTORICAL_INVOCATIONS = [
+  ["references/review-routing-contract.md", "/aquarium:independent-review"]
+].freeze
+orphan_skill_directories = Pathname.glob(PLUGIN.join("skills/*")).select(&:directory?).reject { |dir| dir.join("SKILL.md").file? }
+assert(orphan_skill_directories.empty?, "skill directories without SKILL.md ship nothing Claude Code loads: #{orphan_skill_directories.map { |dir| dir.relative_path_from(PLUGIN).to_s }.inspect}")
+generated_skill_names = skill_paths.map { |path| path.dirname.basename.to_s }.to_set
+shipped_agent_names = Pathname.glob(PLUGIN.join("agents/*.md")).map { |path| path.basename(".md").to_s }.to_set
+unresolved_invocations = []
+# FNM_DOTMATCH reaches `.claude-plugin/plugin.json`, whose description goes
+# through the substitution table too.
+Pathname.glob(PLUGIN.join("**/*"), File::FNM_DOTMATCH).select(&:file?).each do |path|
+  next unless %w[.md .py .json .yaml].include?(path.extname)
+
+  relative = path.relative_path_from(PLUGIN).to_s
+  path.read.scan(%r{(/?)aquarium:([A-Za-z0-9][A-Za-z0-9_-]*)}) do |slash, name|
+    token = "#{slash}aquarium:#{name}"
+    resolved = slash.empty? ? generated_skill_names.include?(name) || shipped_agent_names.include?(name) : generated_skill_names.include?(name)
+    unresolved_invocations << "#{relative}: #{token}" unless resolved || HISTORICAL_INVOCATIONS.include?([relative, token])
+  end
+end
+assert(unresolved_invocations.empty?, "generated text names a skill or agent the plugin does not ship: #{unresolved_invocations.uniq.inspect}")
+HISTORICAL_INVOCATIONS.each do |relative, token|
+  occurrences = PLUGIN.join(relative).file? ? PLUGIN.join(relative).read.scan(token).length : 0
+  assert(occurrences == 1, "historical invocation #{token} must occur exactly once in #{relative}, found #{occurrences}; remove or re-derive its allowance")
+end
+
 # --- host-neutral generated text -------------------------------------------
 
 FORBIDDEN_TEXT = ["$aquarium:", "$use-", "$create-", "$lore-", "$herdr", "$humanize", "request_user_input",

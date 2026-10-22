@@ -2712,6 +2712,17 @@ def apply_additions(destination: Path) -> list[str]:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         added.append(relative)
+    # An addition under a skill directory belongs to that skill. When upstream
+    # renames a skill without an alias, as v0.1.20 did with `independent-review`,
+    # the copy above would recreate the old directory around the addition with
+    # no `SKILL.md`, and no other gate notices a skill directory nothing loads.
+    for relative in ADDED_PATHS:
+        segments = relative.split("/")
+        if segments[0] == "skills" and not (destination / "skills" / segments[1] / "SKILL.md").is_file():
+            raise SyncError(
+                f"addition `{relative}` lives under `skills/{segments[1]}/`, which the "
+                "generated tree does not ship; move it with its skill"
+            )
     return added
 
 
